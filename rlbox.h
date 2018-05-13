@@ -41,6 +41,21 @@ namespace rlbox
 	template<typename T1, typename T2>
 	constexpr bool my_is_same_v = std::is_same<T1, T2>::value;
 
+	template<typename T>
+	constexpr bool my_is_class_v = std::is_class<T>::value;
+
+	template<typename T>
+	constexpr bool my_is_reference_v = std::is_reference<T>::value;
+
+	template<typename T>
+	constexpr bool my_is_array_v = std::is_array<T>::value;
+
+	template<typename T>
+	constexpr bool my_is_union_v = std::is_union<T>::value;
+
+	template<typename T>
+	constexpr bool my_is_fundamental_v = std::is_fundamental<T>::value;
+
 	//Use a custom enum for returns as boolean returns are a bad idea
 	//int returns are automatically cast to a boolean
 	//Some APIs have overloads with boolean and non returns, so best to use a custom class
@@ -49,14 +64,13 @@ namespace rlbox
 		SAFE, UNSAFE
 	};
 
-	template<typename T>
-	inline my_enable_if_t<!my_is_pointer_v<T>,
-	T> getUnsandboxedValue(T field)
+	template<typename T, ENABLE_IF_P(!my_is_pointer_v<T>)>
+	inline T getUnsandboxedValue(T field)
 	{
 		return field;
 	}
 
-	template<typename TField, typename T>
+	template<typename TField, typename T, ENABLE_IF_P(!my_is_class_v<T> && !my_is_reference_v<T> && !my_is_array_v<T>)>
 	inline T getFieldCopy(TField field)
 	{
 		T copy = field;
@@ -102,19 +116,19 @@ namespace rlbox
 		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) {}
 
 		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
-		inline T unsafeUnverified() const
+		inline T UNSAFE_Unverified() const
 		{
 			return field;
 		}
 
-		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
+		template<typename T2=T, ENABLE_IF_P(my_is_fundamental_v<T2>)>
 		inline T copyAndVerify(std::function<T(T)> verifyFunction) const
 		{
 			T copy = getFieldCopy(field);
 			return verifyFunction(copy);
 		}
 
-		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
+		template<typename T2=T, ENABLE_IF_P(my_is_fundamental_v<T2>)>
 		inline T copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			T copy = getFieldCopy(field);
@@ -136,7 +150,7 @@ namespace rlbox
 		}
 
 		template<typename TRHS>
-		inline tainted<TRHS> operator+(tainted<TRHS>& rhs) noexcept
+		inline tainted<TRHS> operator+(tainted<TRHS> rhs) noexcept
 		{
 			tainted<TRHS> result = field + rhs.field;
 			return result;
