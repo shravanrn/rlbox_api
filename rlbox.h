@@ -33,6 +33,9 @@ namespace rlbox_api_detail
 	template<typename T>
 	constexpr bool my_is_pointer_v = std::is_pointer<T>::value;
 
+	template< class T >
+	using my_remove_pointer_t = typename std::remove_pointer<T>::type;
+
 	template<typename T>
 	constexpr bool my_is_one_level_ptr_v = my_is_pointer_v<my_remove_pointer_t<T>>;
 
@@ -65,7 +68,7 @@ namespace rlbox_api_detail
 	inline T getFieldCopy(TField field)
 	{
 		T copy = field;
-		return T;
+		return copy;
 	}
 
 
@@ -88,14 +91,14 @@ namespace rlbox_api_detail
 		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
 		inline T copyAndVerify(std::function<T(T)> verifyFunction) const
 		{
-			T copy = getFieldCopy();
+			T copy = getFieldCopy(field);
 			return verifyFunction(copy);
 		}
 
 		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
 		inline T copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
-			T copy = getFieldCopy();
+			T copy = getFieldCopy(field);
 			return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
 		}
 	};
@@ -103,7 +106,7 @@ namespace rlbox_api_detail
 
 
 template<typename T>
-class tainted : public tainted_base<T, false>
+class tainted : public rlbox_api_detail::tainted_base<T, false>
 {
 };
 
