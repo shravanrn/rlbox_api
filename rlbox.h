@@ -4,20 +4,7 @@
 #include <functional>
 #include <type_traits>
 
-class RLBox_Sandbox
-{
-public:
-	virtual void createSandbox(char* sandboxRuntimePath, char* libraryPath) = 0;
-	void* mallocInSandbox(size_t size);
-	void freeInSandbox(void* val);
-
-	template<typename T>
-	void* registerCallback(std::function<T> callback);
-
-	void unregisterCallback(void* callback);
-};
-
-namespace rlbox_api_detail
+namespace rlbox
 {
 	//https://stackoverflow.com/questions/19532475/casting-a-variadic-parameter-pack-to-void
 	struct UNUSED_PACK_HELPER { template<typename ...Args> UNUSED_PACK_HELPER(Args const & ... ) {} };
@@ -42,6 +29,18 @@ namespace rlbox_api_detail
 	template<typename T>
 	using my_remove_reference_t = typename std::remove_reference<T>::type;
 
+	template<bool B, typename T, typename F>
+	using my_conditional_t = typename std::conditional<B,T,F>::type;
+
+	template<typename T>
+	using my_add_volatile_t = typename std::add_volatile<T>::type;
+
+	template<typename T1, typename T2>
+	constexpr bool my_is_assignable_v = std::is_assignable<T1, T2>::value;
+
+	template<typename T1, typename T2>
+	constexpr bool my_is_same_v = std::is_same<T1, T2>::value;
+
 	//Use a custom enum for returns as boolean returns are a bad idea
 	//int returns are automatically cast to a boolean
 	//Some APIs have overloads with boolean and non returns, so best to use a custom class
@@ -50,16 +49,9 @@ namespace rlbox_api_detail
 		SAFE, UNSAFE
 	};
 
-	template<typename TField, typename T, bool TUsesSandboxAddress>
-	inline my_enable_if_t<my_is_pointer_v<T> && TUsesSandboxAddress,
-	T> getValueOrSwizzledValue(TField field)
-	{
-		return field;
-	}
-
-	template<typename TField, typename T, bool TUsesSandboxAddress>
-	inline my_enable_if_t<!(my_is_pointer_v<T> && TUsesSandboxAddress),
-	T> getValueOrSwizzledValue(TField field)
+	template<typename T>
+	inline my_enable_if_t<!my_is_pointer_v<T>,
+	T> getUnsandboxedValue(T field)
 	{
 		return field;
 	}
@@ -72,20 +64,47 @@ namespace rlbox_api_detail
 	}
 
 
-	template<typename TField, bool TUsesSandboxAddress>
-	class tainted_base
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class RLBox_Sandbox
 	{
+	public:
+		virtual void createSandbox(char* sandboxRuntimePath, char* libraryPath) = 0;
+		void* mallocInSandbox(size_t size);
+		void freeInSandbox(void* val);
+
+		template<typename T>
+		void* registerCallback(std::function<T> callback);
+
+		void unregisterCallback(void* callback);
+	};
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<typename T>
+	class tainted
+	{
+		//make sure tainted<T1> can access private members of tainted<T2>
+	    template <typename U>
+		friend class tainted;
 
 	private:
-
-		TField field;
-		using T = my_remove_volatile_t<my_remove_reference_t<TField>>;
+		T field;
 
 	public:
 
+		tainted() = default;
+		tainted(const tainted<T>& p) = default;
+
+		//we explicitly disable this constructor if it has one of the signatures above, 
+		//	so that we give the above constructors a higher priority
+		template<typename Arg, typename... Args, ENABLE_IF_P(!my_is_same_v<Arg, tainted<T>&> && !my_is_same_v<Arg, tainted<T>>)>
+		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) {}
+
+		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
 		inline T unsafeUnverified() const
 		{
-			return getValueOrSwizzledValue<TField, T, TUsesSandboxAddress>(field);
+			return field;
 		}
 
 		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
@@ -101,15 +120,30 @@ namespace rlbox_api_detail
 			T copy = getFieldCopy(field);
 			return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
 		}
+
+		template<typename TRHS, ENABLE_IF_P(my_is_assignable_v<T&, TRHS>)>
+		inline tainted<T>& operator=(const TRHS& arg) noexcept
+		{
+			field = arg;
+			return *this;
+		}
+
+		template<typename TRHS>
+		inline tainted<T> operator+(TRHS rhs) noexcept
+		{
+			tainted<T> result = field + rhs;
+			return result;
+		}
+
+		template<typename TRHS>
+		inline tainted<TRHS> operator+(tainted<TRHS>& rhs) noexcept
+		{
+			tainted<TRHS> result = field + rhs.field;
+			return result;
+		}
 	};
+
+	#undef ENABLE_IF_P
+	#undef UNUSED
 }
-
-
-template<typename T>
-class tainted : public rlbox_api_detail::tainted_base<T, false>
-{
-};
-
-#undef ENABLE_IF
-#undef UNUSED
 #endif
