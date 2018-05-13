@@ -17,13 +17,16 @@ void printType()
 
 void testAssignment()
 {
-	tainted<int> a;	
+	tainted<int> a;
 	a = 4;
-	tainted<int> b = 4;	
+	tainted<int> b = 5;
 	tainted<int> c = b;
+	tainted<int> d;
+	d = b;
 	ensure(a.UNSAFE_Unverified() == 4);
-	ensure(b.UNSAFE_Unverified() == 4);
-	ensure(c.UNSAFE_Unverified() == 4);
+	ensure(b.UNSAFE_Unverified() == 5);
+	ensure(c.UNSAFE_Unverified() == 5);
+	ensure(d.UNSAFE_Unverified() == 5);
 }
 
 void testOperators()

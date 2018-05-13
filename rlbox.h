@@ -56,6 +56,9 @@ namespace rlbox
 	template<typename T>
 	constexpr bool my_is_fundamental_v = std::is_fundamental<T>::value;
 
+	template<typename T1, typename T2>
+	constexpr bool my_is_base_of_v = std::is_base_of<T1, T2>::value;
+
 	//Use a custom enum for returns as boolean returns are a bad idea
 	//int returns are automatically cast to a boolean
 	//Some APIs have overloads with boolean and non returns, so best to use a custom class
@@ -64,11 +67,11 @@ namespace rlbox
 		SAFE, UNSAFE
 	};
 
-	template<typename T, ENABLE_IF_P(!my_is_pointer_v<T>)>
-	inline T getUnsandboxedValue(T field)
-	{
-		return field;
-	}
+	//template<typename T>
+	//inline T getUnsandboxedValue(T field)
+	//{
+	//	return field;
+	//}
 
 	template<typename TField, typename T, ENABLE_IF_P(!my_is_class_v<T> && !my_is_reference_v<T> && !my_is_array_v<T>)>
 	inline T getFieldCopy(TField field)
@@ -96,7 +99,16 @@ namespace rlbox
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<typename T>
-	class tainted
+	class tainted_base
+	{
+		virtual inline T UNSAFE_Unverified() const = 0;
+	};
+
+	template<typename T>
+	class tainted_volatile;
+
+	template<typename T>
+	class tainted : public tainted_base<T>
 	{
 		//make sure tainted<T1> can access private members of tainted<T2>
 	    template <typename U>
@@ -105,6 +117,18 @@ namespace rlbox
 	private:
 		T field;
 
+		template<typename TRHS, template <typename TRHS> typename TWrap, ENABLE_IF_P(my_is_base_of_v<tainted_base<TRHS>, TWrap<TRHS>>)>
+		inline TRHS unwrap(const TWrap<TRHS> rhs) const noexcept
+		{
+			return rhs.UNSAFE_Unverified();
+		}
+
+		template<typename TRHS>
+		inline TRHS unwrap(const TRHS rhs) const noexcept
+		{
+			return rhs;
+		}
+
 	public:
 
 		tainted() = default;
@@ -112,11 +136,11 @@ namespace rlbox
 
 		//we explicitly disable this constructor if it has one of the signatures above, 
 		//	so that we give the above constructors a higher priority
-		template<typename Arg, typename... Args, ENABLE_IF_P(!my_is_same_v<Arg, tainted<T>&> && !my_is_same_v<Arg, tainted<T>>)>
-		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) {}
+		//	For now we only allow this for fundamental types as this is potentially unsafe for pointers and structs
+		template<typename Arg, typename... Args, ENABLE_IF_P(!my_is_same_v<Arg, tainted<T>&> && !my_is_same_v<Arg, tainted<T>> && my_is_fundamental_v<T>)>
+		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) { }
 
-		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
-		inline T UNSAFE_Unverified() const
+		inline T UNSAFE_Unverified() const noexcept override
 		{
 			return field;
 		}
@@ -124,15 +148,13 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF_P(my_is_fundamental_v<T2>)>
 		inline T copyAndVerify(std::function<T(T)> verifyFunction) const
 		{
-			T copy = getFieldCopy(field);
-			return verifyFunction(copy);
+			return verifyFunction(field);
 		}
 
 		template<typename T2=T, ENABLE_IF_P(my_is_fundamental_v<T2>)>
 		inline T copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
-			T copy = getFieldCopy(field);
-			return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
+			return verifyFunction(field) == RLBox_Verify_Status::SAFE? field : defaultValue;
 		}
 
 		template<typename TRHS, ENABLE_IF_P(my_is_assignable_v<T&, TRHS>)>
@@ -142,18 +164,70 @@ namespace rlbox
 			return *this;
 		}
 
-		template<typename TRHS>
-		inline tainted<T> operator+(TRHS rhs) noexcept
+		inline tainted<T> operator-() const noexcept
 		{
-			tainted<T> result = field + rhs;
+			tainted<T> result = -field;
+			return result;
+		}
+
+		//template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
+		//inline tainted_volatile<T> operator*() const noexcept
+		//{
+		//	tainted_volatile<T> result = *field;
+		//	return result;
+		//}
+
+		template<typename TRHS>
+		inline tainted<T> operator+(const TRHS rhs) const noexcept
+		{
+			tainted<T> result = field + unwrap(rhs);
 			return result;
 		}
 
 		template<typename TRHS>
-		inline tainted<TRHS> operator+(tainted<TRHS> rhs) noexcept
+		inline tainted<T> operator-(const TRHS rhs) const noexcept
 		{
-			tainted<TRHS> result = field + rhs.field;
+			tainted<T> result = field - unwrap(rhs);
 			return result;
+		}
+
+		template<typename TRHS>
+		inline tainted<T> operator*(const TRHS rhs) const noexcept
+		{
+			tainted<T> result = field * unwrap(rhs);
+			return result;
+		}
+	};
+
+	template<typename T>
+	class tainted_volatile : public tainted_base<T>
+	{
+		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U>
+		friend class tainted_volatile;
+
+	private:
+		my_add_volatile_t<T> field;
+
+		tainted_volatile() = default;
+		tainted_volatile(const tainted_volatile<T>& p) = default;
+
+		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
+		inline T getValueOrSwizzledValue() const
+		{
+			return field;
+		}
+
+		template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
+		inline T getValueOrSwizzledValue() const
+		{
+			return getUnsandboxedValue(field);
+		}
+	public:
+
+		inline T UNSAFE_Unverified() const override
+		{
+			return getValueOrSwizzledValue();
 		}
 	};
 
