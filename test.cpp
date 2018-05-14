@@ -43,10 +43,18 @@ void testBinaryOperators()
 
 void testDerefOperators()
 {
-	int a = 3;
 	tainted<int*> pa;
 	tainted_volatile<int>& deref = *pa;
 	tainted<int> deref2 = *pa;
+	(void)(deref);
+	(void)(deref2);
+}
+
+void testAddressOfOperators()
+{
+	tainted<int*> pa;
+	tainted<int*> pa2 = &(*pa);
+	(void)(pa2);
 }
 
 int main(int argc, char const *argv[])

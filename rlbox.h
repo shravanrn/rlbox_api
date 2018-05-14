@@ -114,6 +114,10 @@ namespace rlbox
 		template <typename U>
 		friend class tainted;
 
+		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U>
+		friend class tainted_volatile;
+
 	private:
 		T field;
 
@@ -179,7 +183,8 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>>& operator*() const noexcept
 		{
-			return *((tainted_volatile<my_remove_pointer_t<T>>*) field);
+			auto& ret = *((tainted_volatile<my_remove_pointer_t<T>>*) field);
+			return ret;
 		}
 
 		template<typename TRHS>
@@ -207,13 +212,13 @@ namespace rlbox
 	template<typename T>
 	class tainted_volatile : public tainted_base<T>
 	{
-		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
-		template <typename U>
-		friend class tainted_volatile;
-
 		//make sure tainted<T1> can access private members of tainted<T2>
 		template <typename U>
 		friend class tainted;
+
+		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U>
+		friend class tainted_volatile;
 
 	private:
 		my_add_volatile_t<T> field;
@@ -237,6 +242,20 @@ namespace rlbox
 		inline T UNSAFE_Unverified() const override
 		{
 			return getValueOrSwizzledValue();
+		}
+
+		inline tainted<T*> operator&() const noexcept
+		{
+			tainted<T*> ret;
+			ret.field = (T*) &field;
+			return ret;
+		}
+
+		template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
+		inline tainted_volatile<my_remove_pointer_t<T>>& operator*() const noexcept
+		{
+			auto& ret = *getValueOrSwizzledValue();
+			return ret;
 		}
 	};
 
