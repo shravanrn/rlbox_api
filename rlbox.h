@@ -12,8 +12,9 @@ namespace rlbox
 
 	template<bool T, typename V>
 	using my_enable_if_t = typename std::enable_if<T, V>::type;
-	#define ENABLE_IF_P(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
+	#define ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
 
+	//C++11 doesn't have the _t and _v convenience helpers, so create these
 	template<typename T>
 	using my_remove_volatile_t = typename std::remove_volatile<T>::type;
 
@@ -67,62 +68,40 @@ namespace rlbox
 		SAFE, UNSAFE
 	};
 
-	//template<typename T>
-	//inline T getUnsandboxedValue(T field)
-	//{
-	//	return field;
-	//}
-
-	template<typename TField, typename T, ENABLE_IF_P(!my_is_class_v<T> && !my_is_reference_v<T> && !my_is_array_v<T>)>
+	template<typename TField, typename T, ENABLE_IF(!my_is_class_v<T> && !my_is_reference_v<T> && !my_is_array_v<T>)>
 	inline T getFieldCopy(TField field)
 	{
 		T copy = field;
 		return copy;
 	}
 
-
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class RLBox_Sandbox
-	{
-	public:
-		virtual void createSandbox(char* sandboxRuntimePath, char* libraryPath) = 0;
-		void* mallocInSandbox(size_t size);
-		void freeInSandbox(void* val);
-
-		template<typename T>
-		void* registerCallback(std::function<T> callback);
-
-		void unregisterCallback(void* callback);
-	};
-
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<typename T>
+	template<typename T, typename TSandbox>
 	class tainted_base
 	{
 		virtual inline T UNSAFE_Unverified() const = 0;
 	};
 
-	template<typename T>
+	template<typename T, typename TSandbox>
 	class tainted_volatile;
 
-	template<typename T>
-	class tainted : public tainted_base<T>
+	template<typename T, typename TSandbox>
+	class tainted : public tainted_base<T, TSandbox>
 	{
 		//make sure tainted<T1> can access private members of tainted<T2>
-		template <typename U>
+		template <typename U1, typename U2>
 		friend class tainted;
 
 		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
-		template <typename U>
+		template <typename U1, typename U2>
 		friend class tainted_volatile;
 
 	private:
 		T field;
 
-		template<typename TRHS, template <typename> typename TWrap, ENABLE_IF_P(my_is_base_of_v<tainted_base<TRHS>, TWrap<TRHS>>)>
-		inline TRHS unwrap(const TWrap<TRHS> rhs) const noexcept
+		template<typename TRHS, template <typename, typename> typename TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
+		inline TRHS unwrap(const TWrap<TRHS, TSandbox> rhs) const noexcept
 		{
 			return rhs.UNSAFE_Unverified();
 		}
@@ -136,10 +115,10 @@ namespace rlbox
 	public:
 
 		tainted() = default;
-		tainted(const tainted<T>& p) = default;
+		tainted(const tainted<T, TSandbox>& p) = default;
 
-		template<typename T2=T, ENABLE_IF_P(my_is_fundamental_v<T2>)>
-		tainted(const tainted_volatile<T>& p)
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
+		tainted(const tainted_volatile<T, TSandbox>& p)
 		{
 			field = p.field;
 		}
@@ -147,7 +126,7 @@ namespace rlbox
 		//we explicitly disable this constructor if it has one of the signatures above, 
 		//	so that we give the above constructors a higher priority
 		//	For now we only allow this for fundamental types as this is potentially unsafe for pointers and structs
-		template<typename Arg, typename... Args, ENABLE_IF_P(!my_is_base_of_v<tainted_base<T>, my_remove_reference_t<Arg>> && my_is_fundamental_v<T>)>
+		template<typename Arg, typename... Args, ENABLE_IF(!my_is_base_of_v<tainted_base<T, TSandbox>, my_remove_reference_t<Arg>> && my_is_fundamental_v<T>)>
 		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) { }
 
 		inline T UNSAFE_Unverified() const noexcept override
@@ -155,87 +134,87 @@ namespace rlbox
 			return field;
 		}
 
-		template<typename T2=T, ENABLE_IF_P(my_is_fundamental_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
 		inline T copyAndVerify(std::function<T(T)> verifyFunction) const
 		{
 			return verifyFunction(field);
 		}
 
-		template<typename T2=T, ENABLE_IF_P(my_is_fundamental_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
 		inline T copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			return verifyFunction(field) == RLBox_Verify_Status::SAFE? field : defaultValue;
 		}
 
-		template<typename TRHS, ENABLE_IF_P(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
-		inline tainted<T>& operator=(const TRHS& arg) noexcept
+		template<typename TRHS, ENABLE_IF(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
+		inline tainted<T, TSandbox>& operator=(const TRHS& arg) noexcept
 		{
 			field = arg;
 			return *this;
 		}
 
-		inline tainted<T> operator-() const noexcept
+		inline tainted<T, TSandbox> operator-() const noexcept
 		{
-			tainted<T> result = -field;
+			tainted<T, TSandbox> result = -field;
 			return result;
 		}
 
-		template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
-		inline tainted_volatile<my_remove_pointer_t<T>>& operator*() const noexcept
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
 		{
-			auto& ret = *((tainted_volatile<my_remove_pointer_t<T>>*) field);
+			auto& ret = *((tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) field);
 			return ret;
 		}
 
 		template<typename TRHS>
-		inline tainted<T> operator+(const TRHS rhs) const noexcept
+		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
-			tainted<T> result = field + unwrap(rhs);
+			tainted<T, TSandbox> result = field + unwrap(rhs);
 			return result;
 		}
 
 		template<typename TRHS>
-		inline tainted<T> operator-(const TRHS rhs) const noexcept
+		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
-			tainted<T> result = field - unwrap(rhs);
+			tainted<T, TSandbox> result = field - unwrap(rhs);
 			return result;
 		}
 
 		template<typename TRHS>
-		inline tainted<T> operator*(const TRHS rhs) const noexcept
+		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
-			tainted<T> result = field * unwrap(rhs);
+			tainted<T, TSandbox> result = field * unwrap(rhs);
 			return result;
 		}
 	};
 
-	template<typename T>
-	class tainted_volatile : public tainted_base<T>
+	template<typename T, typename TSandbox>
+	class tainted_volatile : public tainted_base<T, TSandbox>
 	{
 		//make sure tainted<T1> can access private members of tainted<T2>
-		template <typename U>
+		template <typename U1, typename U2>
 		friend class tainted;
 
 		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
-		template <typename U>
+		template <typename U1, typename U2>
 		friend class tainted_volatile;
 
 	private:
 		my_add_volatile_t<T> field;
 
 		tainted_volatile() = default;
-		tainted_volatile(const tainted_volatile<T>& p) = default;
+		tainted_volatile(const tainted_volatile<T, TSandbox>& p) = default;
 
-		template<typename T2=T, ENABLE_IF_P(!my_is_pointer_v<T2>)>
+		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline T getValueOrSwizzledValue() const
 		{
 			return field;
 		}
 
-		template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline T getValueOrSwizzledValue() const
 		{
-			return getUnsandboxedValue(field);
+			return (T) TSandbox::getUnsandboxedPointer(field);
 		}
 	public:
 
@@ -244,22 +223,22 @@ namespace rlbox
 			return getValueOrSwizzledValue();
 		}
 
-		inline tainted<T*> operator&() const noexcept
+		inline tainted<T*, TSandbox> operator&() const noexcept
 		{
-			tainted<T*> ret;
+			tainted<T*, TSandbox> ret;
 			ret.field = (T*) &field;
 			return ret;
 		}
 
-		template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
-		inline tainted_volatile<my_remove_pointer_t<T>>& operator*() const noexcept
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
 		{
-			auto& ret = *getValueOrSwizzledValue();
-			return ret;
+			auto ret = (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) getValueOrSwizzledValue();
+			return *ret;
 		}
 	};
 
-	#undef ENABLE_IF_P
+	#undef ENABLE_IF
 	#undef UNUSED
 }
 #endif
