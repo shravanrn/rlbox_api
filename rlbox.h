@@ -236,27 +236,54 @@ namespace rlbox
 		tainted_volatile(const tainted_volatile<T, TSandbox>& p) = default;
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
-		inline T getValueOrSwizzledValue() const
+		inline T getAppSwizzledValue(T arg) const
 		{
-			return field;
+			return arg;
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline T getValueOrSwizzledValue() const
+		inline T getAppSwizzledValue(T arg) const
 		{
-			return (T) TSandbox::getUnsandboxedPointer(field);
+			return (T) TSandbox::getUnsandboxedPointer(arg);
+		}
+
+
+		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		inline T getSandboxSwizzledValue(T arg) const
+		{
+			return arg;
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline T getSandboxSwizzledValue(T arg) const
+		{
+			return (T) TSandbox::getSandboxedPointer(arg);
 		}
 	public:
 
 		inline T UNSAFE_Unverified() const override
 		{
-			return getValueOrSwizzledValue();
+			return getAppSwizzledValue(field);
+		}
+
+		template<typename TRHS, ENABLE_IF(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
+		inline tainted_volatile<T, TSandbox>& operator=(const TRHS& arg) noexcept
+		{
+			field = arg;
+			return *this;
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_pointer_v<T> && my_is_assignable_v<T&, TRHS*>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const app_ptr_wrap<TRHS>& arg) noexcept
 		{
 			field = arg.field;
+			return *this;
+		}
+
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		inline tainted_volatile<T, TSandbox>& operator=(const tainted<TRHS, TSandbox>& arg) noexcept
+		{
+			field = getSandboxSwizzledValue(arg.field);
 			return *this;
 		}
 
@@ -270,7 +297,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
 		{
-			auto ret = (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) getValueOrSwizzledValue();
+			auto ret = (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) getAppSwizzledValue(field);
 			return *ret;
 		}
 	};

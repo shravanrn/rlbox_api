@@ -28,6 +28,11 @@ public:
 	{
 		return p;
 	}
+	
+	static inline void* getSandboxedPointer(void* p)
+	{
+		return p;
+	}
 
 	void* keepAddressInSandboxedRange(void* p)
 	{
@@ -111,14 +116,15 @@ void testDerefOperators()
 
 void testVolatileDerefOperator()
 {
-	tainted<int**, NoOpSandbox> ppa;
+	tainted<int**, NoOpSandbox> ppa = sandbox->newInSandbox<int*>();
+	*ppa = sandbox->newInSandbox<int>();
 	tainted<int, NoOpSandbox> a = **ppa;
 	(void)(a);
 }
 
 void testAddressOfOperators()
 {
-	tainted<int*, NoOpSandbox> pa;
+	tainted<int*, NoOpSandbox> pa = sandbox->newInSandbox<int>();
 	tainted<int*, NoOpSandbox> pa2 = &(*pa);
 	(void)(pa2);
 }
@@ -135,5 +141,9 @@ int main(int argc, char const *argv[])
 	sandbox = RLBoxSandbox<NoOpSandbox>::createSandbox("", "");
 	testAssignment();
 	testBinaryOperators();
+	testDerefOperators();
+	testVolatileDerefOperator();
+	testAddressOfOperators();
+	testAppPointer();
 	return 0;
 }
