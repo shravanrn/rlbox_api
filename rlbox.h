@@ -60,6 +60,31 @@ namespace rlbox
 	template<typename T1, typename T2>
 	constexpr bool my_is_base_of_v = std::is_base_of<T1, T2>::value;
 
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template <typename T>
+	class app_ptr_wrap
+	{
+	private:
+		T* field;
+	public:
+ 		template<typename U>
+		friend app_ptr_wrap<U> app_ptr(U* arg);
+
+		template <typename U1, typename U2>
+		friend class tainted_volatile;
+	};
+
+	template<typename T>
+	inline app_ptr_wrap<T> app_ptr(T* arg)
+	{
+		app_ptr_wrap<T> ret;
+		ret.field = arg;
+		return ret;
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	//Use a custom enum for returns as boolean returns are a bad idea
 	//int returns are automatically cast to a boolean
 	//Some APIs have overloads with boolean and non returns, so best to use a custom class
@@ -96,6 +121,9 @@ namespace rlbox
 		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
 		template <typename U1, typename U2>
 		friend class tainted_volatile;
+
+		template<typename U>
+		friend class RLBoxSandbox;
 
 	private:
 		T field;
@@ -152,6 +180,8 @@ namespace rlbox
 			field = arg;
 			return *this;
 		}
+
+		//we don't support app pointers in structs that are maintained in application memory.
 
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
@@ -223,6 +253,13 @@ namespace rlbox
 			return getValueOrSwizzledValue();
 		}
 
+		template<typename TRHS, ENABLE_IF(my_is_pointer_v<T> && my_is_assignable_v<T&, TRHS*>)>
+		inline tainted_volatile<T, TSandbox>& operator=(const app_ptr_wrap<TRHS>& arg) noexcept
+		{
+			field = arg.field;
+			return *this;
+		}
+
 		inline tainted<T*, TSandbox> operator&() const noexcept
 		{
 			tainted<T*, TSandbox> ret;
@@ -237,6 +274,31 @@ namespace rlbox
 			return *ret;
 		}
 	};
+
+	template<typename TSandbox>
+	class RLBoxSandbox : protected TSandbox
+	{
+	private:
+		RLBoxSandbox(){}
+	public:
+		static RLBoxSandbox* createSandbox(const char* sandboxRuntimePath, const char* libraryPath)
+		{
+			RLBoxSandbox* ret = new RLBoxSandbox();
+			ret->initMemoryIsolation(sandboxRuntimePath, libraryPath);
+			return ret;
+		}
+
+		template<typename T>
+		tainted<T*, TSandbox> newInSandbox(unsigned int count=1)
+		{
+			void* addr = this->mallocInSandbox(sizeof(T) * count);
+			void* rangeCheckedAddr = this->keepAddressInSandboxedRange(addr);
+			tainted<T*, TSandbox> ret;
+			ret.field = (T*) rangeCheckedAddr;
+			return ret;
+		}
+	};
+
 
 	#undef ENABLE_IF
 	#undef UNUSED

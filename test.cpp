@@ -1,14 +1,17 @@
 #include "rlbox.h"
 #include <stdio.h>
-
+#include <type_traits>
 using namespace rlbox;
 
 #define ensure(a) if(!(a)) { printf("%s check failed\n", #a); exit(1); }
 
 class NoOpSandbox
 {
+private:
+	void* allowedFunctions[32];
+
 public:
-	void createSandbox(char* sandboxRuntimePath, char* libraryPath)
+	void initMemoryIsolation(const char* sandboxRuntimePath, const char* libraryPath)
 	{
 
 	}
@@ -21,19 +24,46 @@ public:
 		free(val);
 	}
 
-	// template<typename T>
-	// void* registerCallback(std::function<T> callback);
-
-	static void* getUnsandboxedPointer(void* p)
+	static inline void* getUnsandboxedPointer(void* p)
 	{
 		return p;
 	}
 
+	void* keepAddressInSandboxedRange(void* p)
+	{
+		return p;
+	}
+
+	template<typename T, typename std::enable_if<std::is_function<T>::value || std::is_member_function_pointer<T*>::value>::type* = nullptr>
+	void* registerCallback(T* callback)
+	{
+		for(unsigned int i = 0; i < sizeof(allowedFunctions)/sizeof(void*); i++)
+		{
+			if(allowedFunctions == nullptr)
+			{
+				allowedFunctions[i] = (void*)(uintptr_t) callback;
+				return callback;
+			}
+		}
+
+		return nullptr;
+	}
+
 	void unregisterCallback(void* callback)
 	{
-
+		for(unsigned int i = 0; i < sizeof(allowedFunctions)/sizeof(void*); i++)
+		{
+			if(allowedFunctions == callback)
+			{
+				allowedFunctions[i] = nullptr;
+				break;
+			}
+		}
 	}
 };
+
+RLBoxSandbox<NoOpSandbox>* sandbox;
+
 template<typename T>
 void printType()
 {
@@ -72,7 +102,7 @@ void testBinaryOperators()
 
 void testDerefOperators()
 {
-	tainted<int*, NoOpSandbox> pa;
+	tainted<int*, NoOpSandbox> pa = sandbox->newInSandbox<int>();
 	tainted_volatile<int, NoOpSandbox>& deref = *pa;
 	tainted<int, NoOpSandbox> deref2 = *pa;
 	(void)(deref);
@@ -93,8 +123,16 @@ void testAddressOfOperators()
 	(void)(pa2);
 }
 
+void testAppPointer()
+{
+	tainted<int**, NoOpSandbox> ppa = sandbox->newInSandbox<int*>();
+	int* pa = new int;
+	*ppa = app_ptr(pa);
+}
+
 int main(int argc, char const *argv[])
 {
+	sandbox = RLBoxSandbox<NoOpSandbox>::createSandbox("", "");
 	testAssignment();
 	testBinaryOperators();
 	return 0;
