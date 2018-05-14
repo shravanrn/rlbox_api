@@ -29,7 +29,7 @@ void testAssignment()
 	ensure(d.UNSAFE_Unverified() == 5);
 }
 
-void testOperators()
+void testBinaryOperators()
 {
 	tainted<int> a = 3;
 	tainted<int> b = 3 + 4;
@@ -41,9 +41,17 @@ void testOperators()
 	ensure(d.UNSAFE_Unverified() == 10);
 }
 
+void testDerefOperators()
+{
+	int a = 3;
+	tainted<int*> pa;
+	tainted_volatile<int>& deref = *pa;
+	tainted<int> deref2 = *pa;
+}
+
 int main(int argc, char const *argv[])
 {
 	testAssignment();
-	testOperators();
+	testBinaryOperators();
 	return 0;
 }

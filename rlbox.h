@@ -111,7 +111,7 @@ namespace rlbox
 	class tainted : public tainted_base<T>
 	{
 		//make sure tainted<T1> can access private members of tainted<T2>
-	    template <typename U>
+		template <typename U>
 		friend class tainted;
 
 	private:
@@ -134,10 +134,16 @@ namespace rlbox
 		tainted() = default;
 		tainted(const tainted<T>& p) = default;
 
+		template<typename T2=T, ENABLE_IF_P(my_is_fundamental_v<T2>)>
+		tainted(const tainted_volatile<T>& p)
+		{
+			field = p.field;
+		}
+
 		//we explicitly disable this constructor if it has one of the signatures above, 
 		//	so that we give the above constructors a higher priority
 		//	For now we only allow this for fundamental types as this is potentially unsafe for pointers and structs
-		template<typename Arg, typename... Args, ENABLE_IF_P(!my_is_same_v<Arg, tainted<T>&> && !my_is_same_v<Arg, tainted<T>> && my_is_fundamental_v<T>)>
+		template<typename Arg, typename... Args, ENABLE_IF_P(!my_is_base_of_v<tainted_base<T>, my_remove_reference_t<Arg>> && my_is_fundamental_v<T>)>
 		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) { }
 
 		inline T UNSAFE_Unverified() const noexcept override
@@ -157,7 +163,7 @@ namespace rlbox
 			return verifyFunction(field) == RLBox_Verify_Status::SAFE? field : defaultValue;
 		}
 
-		template<typename TRHS, ENABLE_IF_P(my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, ENABLE_IF_P(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted<T>& operator=(const TRHS& arg) noexcept
 		{
 			field = arg;
@@ -170,12 +176,11 @@ namespace rlbox
 			return result;
 		}
 
-		//template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
-		//inline tainted_volatile<T> operator*() const noexcept
-		//{
-		//	tainted_volatile<T> result = *field;
-		//	return result;
-		//}
+		template<typename T2=T, ENABLE_IF_P(my_is_pointer_v<T2>)>
+		inline tainted_volatile<my_remove_pointer_t<T>>& operator*() const noexcept
+		{
+			return *((tainted_volatile<my_remove_pointer_t<T>>*) field);
+		}
 
 		template<typename TRHS>
 		inline tainted<T> operator+(const TRHS rhs) const noexcept
@@ -205,6 +210,10 @@ namespace rlbox
 		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
 		template <typename U>
 		friend class tainted_volatile;
+
+		//make sure tainted<T1> can access private members of tainted<T2>
+		template <typename U>
+		friend class tainted;
 
 	private:
 		my_add_volatile_t<T> field;
