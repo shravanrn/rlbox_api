@@ -117,7 +117,7 @@ namespace rlbox
 	private:
 		T field;
 
-		template<typename TRHS, template <typename TRHS> typename TWrap, ENABLE_IF_P(my_is_base_of_v<tainted_base<TRHS>, TWrap<TRHS>>)>
+		template<typename TRHS, template <typename> typename TWrap, ENABLE_IF_P(my_is_base_of_v<tainted_base<TRHS>, TWrap<TRHS>>)>
 		inline TRHS unwrap(const TWrap<TRHS> rhs) const noexcept
 		{
 			return rhs.UNSAFE_Unverified();
