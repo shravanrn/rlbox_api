@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <type_traits>
+#include <map>
 
 namespace rlbox
 {
@@ -10,11 +11,26 @@ namespace rlbox
 	struct UNUSED_PACK_HELPER { template<typename ...Args> UNUSED_PACK_HELPER(Args const & ... ) {} };
 	#define UNUSED(x) rlbox_api_detail::UNUSED_PACK_HELPER {x}
 
-	template<bool T, typename V>
-	using my_enable_if_t = typename std::enable_if<T, V>::type;
-	#define ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
+	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
+	template<typename Ret, typename... Rest>
+	Ret return_argument_helper(Ret(*) (Rest...));
+
+	template<typename Ret, typename F, typename... Rest>
+	Ret return_argument_helper(Ret(F::*) (Rest...));
+
+	template<typename Ret, typename F, typename... Rest>
+	Ret return_argument_helper(Ret(F::*) (Rest...) const);
+
+	template <typename F>
+	decltype(return_argument_helper(&F::operator())) return_argument_helper(F);
+
+	template <typename T>
+	using return_argument = decltype(return_argument_helper(std::declval<T>()));
 
 	//C++11 doesn't have the _t and _v convenience helpers, so create these
+	template<bool T, typename V>
+	using my_enable_if_t = typename std::enable_if<T, V>::type;
+
 	template<typename T>
 	using my_remove_volatile_t = typename std::remove_volatile<T>::type;
 
@@ -23,9 +39,6 @@ namespace rlbox
 
 	template< class T >
 	using my_remove_pointer_t = typename std::remove_pointer<T>::type;
-
-	template<typename T>
-	constexpr bool my_is_one_level_ptr_v = my_is_pointer_v<my_remove_pointer_t<T>>;
 
 	template<typename T>
 	using my_remove_reference_t = typename std::remove_reference<T>::type;
@@ -59,6 +72,20 @@ namespace rlbox
 
 	template<typename T1, typename T2>
 	constexpr bool my_is_base_of_v = std::is_base_of<T1, T2>::value;
+
+	template<typename T>
+	constexpr bool my_is_void_v = std::is_void<T>::value;
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//Some additional helpers
+
+	#define ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
+
+	template<typename T>
+	constexpr bool my_is_one_level_ptr_v = my_is_pointer_v<my_remove_pointer_t<T>>;
+
+	template<typename T>
+	using my_array_element_t = my_remove_reference_t<decltype(*(std::declval<T>()))>;
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -105,7 +132,6 @@ namespace rlbox
 	template<typename T, typename TSandbox>
 	class tainted_base
 	{
-		virtual inline T UNSAFE_Unverified() const = 0;
 	};
 
 	template<typename T, typename TSandbox>
@@ -157,7 +183,7 @@ namespace rlbox
 		template<typename Arg, typename... Args, ENABLE_IF(!my_is_base_of_v<tainted_base<T, TSandbox>, my_remove_reference_t<Arg>> && my_is_fundamental_v<T>)>
 		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) { }
 
-		inline T UNSAFE_Unverified() const noexcept override
+		inline T UNSAFE_Unverified() const noexcept
 		{
 			return field;
 		}
@@ -261,7 +287,7 @@ namespace rlbox
 		}
 	public:
 
-		inline T UNSAFE_Unverified() const override
+		inline T UNSAFE_Unverified() const noexcept
 		{
 			return getAppSwizzledValue(field);
 		}
@@ -302,11 +328,35 @@ namespace rlbox
 		}
 	};
 
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template <typename T, typename TSandbox>
+	inline my_enable_if_t<my_is_array_v<T>,
+	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, my_array_element_t<T>* retRaw)
+	{
+		//arrays are returned by pointer but tainted<Foo[]> is returned by value, so copy happens automatically
+		auto retRawPtr = (tainted<T, TSandbox> *) retRaw;
+		return *retRawPtr;
+	}
+
+	template <typename T, typename TSandbox>
+	inline my_enable_if_t<my_is_fundamental_v<T>,
+	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, T retRaw)
+	{
+		//primitives are returned by value
+		auto retRawPtr = (tainted<T, TSandbox> *) &retRaw;
+		return *retRawPtr;
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	template<typename TSandbox>
 	class RLBoxSandbox : protected TSandbox
 	{
 	private:
 		RLBoxSandbox(){}
+		void* fnPointerMap = nullptr;
+
 	public:
 		static RLBoxSandbox* createSandbox(const char* sandboxRuntimePath, const char* libraryPath)
 		{
@@ -324,7 +374,63 @@ namespace rlbox
 			ret.field = (T*) rangeCheckedAddr;
 			return ret;
 		}
+
+		template <typename T, typename ... TArgs, ENABLE_IF(my_is_same_v<return_argument<T>, void>)>
+		void invokeStatic(T* fnPtr, TArgs... params)
+		{
+			fnPtr(params...);
+		}
+
+		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_same_v<return_argument<T>, void>)>
+		tainted<return_argument<T>, TSandbox> invokeStatic(T* fnPtr, TArgs... params)
+		{
+			return_argument<T> fnRet = fnPtr(params...);
+			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
+			return ret;
+		}
+
+		template <typename T, typename ... TArgs, ENABLE_IF(my_is_same_v<return_argument<T>, void>)>
+		return_argument<T> invokeWithFunctionPointer(T* fnPtr, TArgs... params)
+		{
+			this->invokeFunction(fnPtr, params...);
+		}
+
+		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_same_v<return_argument<T>, void>)>
+		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs... params)
+		{
+			return_argument<T> fnRet = this->invokeFunction(fnPtr, params...);
+			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
+			return ret;
+		}
+
+		void* getFunctionPointerFromCache(const char* fnName)
+		{
+			void* fnPtr;
+			if(!fnPointerMap)
+			{
+				fnPointerMap = new std::map<std::string, void*>;
+			}
+
+			auto& fnMapTyped = *(std::map<std::string, void*> *) fnPointerMap;
+			auto fnPtrRef = fnMapTyped.find(fnName);
+
+			if(fnPtrRef == fnMapTyped.end())
+			{
+				fnPtr = this->lookupSymbol(fnName);
+				fnMapTyped[fnName] = fnPtr;
+			}
+			else
+			{
+				fnPtr = fnPtrRef->second;
+			}
+
+			return fnPtr;
+		}
 	};
+
+	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
+	#define sandbox_invoke_static(sandbox, fnName, ...) sandbox->invokeStatic(&fnName, ##__VA_ARGS__)
+	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
 
 
 	#undef ENABLE_IF
