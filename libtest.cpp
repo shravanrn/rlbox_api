@@ -1,6 +1,7 @@
 #include "libtest.h"
 
-int simpleFunction()
-{ 
-    return 42;
+
+int simpleAddTest(int a, int b)
+{
+	return a + b;
 }

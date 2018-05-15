@@ -89,23 +89,24 @@ namespace rlbox
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	class sandbox_wrapper_base {};
+
 	template <typename T>
-	class app_ptr_wrap
+	class app_ptr_wrapper : sandbox_wrapper_base
 	{
 	private:
 		T* field;
 	public:
  		template<typename U>
-		friend app_ptr_wrap<U> app_ptr(U* arg);
+		friend app_ptr_wrapper<U> app_ptr(U* arg);
 
-		template <typename U1, typename U2>
-		friend class tainted_volatile;
+		inline T* UNSAFE_Unverified() const noexcept { return field; }
 	};
 
 	template<typename T>
-	inline app_ptr_wrap<T> app_ptr(T* arg)
+	inline app_ptr_wrapper<T> app_ptr(T* arg)
 	{
-		app_ptr_wrap<T> ret;
+		app_ptr_wrapper<T> ret;
 		ret.field = arg;
 		return ret;
 	}
@@ -130,7 +131,7 @@ namespace rlbox
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<typename T, typename TSandbox>
-	class tainted_base
+	class tainted_base : public sandbox_wrapper_base
 	{
 	};
 
@@ -273,7 +274,6 @@ namespace rlbox
 			return (T) TSandbox::impl_GetUnsandboxedPointer(arg);
 		}
 
-
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline T getSandboxSwizzledValue(T arg) const
 		{
@@ -300,9 +300,9 @@ namespace rlbox
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_pointer_v<T> && my_is_assignable_v<T&, TRHS*>)>
-		inline tainted_volatile<T, TSandbox>& operator=(const app_ptr_wrap<TRHS>& arg) noexcept
+		inline tainted_volatile<T, TSandbox>& operator=(const app_ptr_wrapper<TRHS>& arg) noexcept
 		{
-			field = arg.field;
+			field = arg.UNSAFE_Unverified();
 			return *this;
 		}
 
@@ -350,6 +350,20 @@ namespace rlbox
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	template <typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
+	inline T sandbox_removeWrapper(T arg)
+	{
+		return arg;
+	}
+
+	template<typename TRHS, typename... TRHSRem, template<typename, typename...> typename TWrap, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
+	inline auto sandbox_removeWrapper(TWrap<TRHS, TRHSRem...> arg) -> decltype(arg.UNSAFE_Unverified())
+	{
+		return arg.UNSAFE_Unverified();
+	}
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	template<typename TSandbox>
 	class RLBoxSandbox : protected TSandbox
 	{
@@ -378,27 +392,27 @@ namespace rlbox
 		template <typename T, typename ... TArgs, ENABLE_IF(my_is_same_v<return_argument<T>, void>)>
 		void invokeStatic(T* fnPtr, TArgs... params)
 		{
-			fnPtr(params...);
+			fnPtr(sandbox_removeWrapper(params)...);
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_same_v<return_argument<T>, void>)>
 		tainted<return_argument<T>, TSandbox> invokeStatic(T* fnPtr, TArgs... params)
 		{
-			return_argument<T> fnRet = fnPtr(params...);
+			return_argument<T> fnRet = fnPtr(sandbox_removeWrapper(params)...);
 			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
 			return ret;
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(my_is_same_v<return_argument<T>, void>)>
-		return_argument<T> invokeWithFunctionPointer(T* fnPtr, TArgs... params)
+		void invokeWithFunctionPointer(T* fnPtr, TArgs... params)
 		{
-			this->invokeFunction(fnPtr, params...);
+			this->invokeFunction(fnPtr, sandbox_removeWrapper(params)...);
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_same_v<return_argument<T>, void>)>
 		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs... params)
 		{
-			return_argument<T> fnRet = this->invokeFunction(fnPtr, params...);
+			return_argument<T> fnRet = this->invokeFunction(fnPtr, sandbox_removeWrapper(params)...);
 			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
 			return ret;
 		}

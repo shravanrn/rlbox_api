@@ -1,3 +1,3 @@
 extern "C" {
-    int simpleFunction();
+    int simpleAddTest(int a, int b);
 }

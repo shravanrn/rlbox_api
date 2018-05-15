@@ -172,10 +172,11 @@ void testAppPointer()
 
 void testFunctionInvocation()
 {
-	auto ret = sandbox_invoke_static(sandbox, simpleFunction);
+	tainted<int, DynLibNoSandbox> a = 20;
+	auto ret = sandbox_invoke_static(sandbox, simpleAddTest, a, 22);
 	ENSURE(ret.UNSAFE_Unverified() == 42);
 
-	auto ret2 = sandbox_invoke(sandbox, simpleFunction);
+	auto ret2 = sandbox_invoke(sandbox, simpleAddTest, a, 22);
 	ENSURE(ret2.UNSAFE_Unverified() == 42);
 }
 
