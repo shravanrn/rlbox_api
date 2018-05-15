@@ -270,7 +270,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline T getAppSwizzledValue(T arg) const
 		{
-			return (T) TSandbox::getUnsandboxedPointer(arg);
+			return (T) TSandbox::impl_GetUnsandboxedPointer(arg);
 		}
 
 
@@ -283,7 +283,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline T getSandboxSwizzledValue(T arg) const
 		{
-			return (T) TSandbox::getSandboxedPointer(arg);
+			return (T) TSandbox::impl_GetSandboxedPointer(arg);
 		}
 	public:
 
@@ -361,15 +361,15 @@ namespace rlbox
 		static RLBoxSandbox* createSandbox(const char* sandboxRuntimePath, const char* libraryPath)
 		{
 			RLBoxSandbox* ret = new RLBoxSandbox();
-			ret->initMemoryIsolation(sandboxRuntimePath, libraryPath);
+			ret->impl_CreateSandbox(sandboxRuntimePath, libraryPath);
 			return ret;
 		}
 
 		template<typename T>
-		tainted<T*, TSandbox> newInSandbox(unsigned int count=1)
+		tainted<T*, TSandbox> mallocInSandbox(unsigned int count=1)
 		{
-			void* addr = this->mallocInSandbox(sizeof(T) * count);
-			void* rangeCheckedAddr = this->keepAddressInSandboxedRange(addr);
+			void* addr = this->impl_mallocInSandbox(sizeof(T) * count);
+			void* rangeCheckedAddr = this->impl_KeepAddressInSandboxedRange(addr);
 			tainted<T*, TSandbox> ret;
 			ret.field = (T*) rangeCheckedAddr;
 			return ret;

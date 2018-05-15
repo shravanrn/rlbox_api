@@ -7,7 +7,8 @@
 
 using namespace rlbox;
 
-#define ensure(a) if(!(a)) { printf("%s check failed\n", #a); exit(1); }
+#define ENSURE(a) if(!(a)) { printf("%s check failed\n", #a); exit(1); }
+#define UNUSED(a) (void)(a)
 
 class DynLibNoSandbox
 {
@@ -16,7 +17,7 @@ private:
 	void* libHandle = nullptr;
 
 public:
-	void initMemoryIsolation(const char* sandboxRuntimePath, const char* libraryPath)
+	void impl_CreateSandbox(const char* sandboxRuntimePath, const char* libraryPath)
 	{
 		libHandle = dlopen(libraryPath, RTLD_LAZY);
 		if(!libHandle)
@@ -25,26 +26,26 @@ public:
 			exit(1);
 		}
 	}
-	void* mallocInSandbox(size_t size)
+	void* impl_mallocInSandbox(size_t size)
 	{
 		return malloc(size);
 	}
-	void freeInSandbox(void* val)
+	void impl_freeInSandbox(void* val)
 	{
 		free(val);
 	}
 
-	static inline void* getUnsandboxedPointer(void* p)
+	static inline void* impl_GetUnsandboxedPointer(void* p)
 	{
 		return p;
 	}
 	
-	static inline void* getSandboxedPointer(void* p)
+	static inline void* impl_GetSandboxedPointer(void* p)
 	{
 		return p;
 	}
 
-	void* keepAddressInSandboxedRange(void* p)
+	void* impl_KeepAddressInSandboxedRange(void* p)
 	{
 		return p;
 	}
@@ -108,8 +109,8 @@ void printType()
 
 void testSizes()
 {
-	ensure(sizeof(tainted<int, DynLibNoSandbox>) == sizeof(int));
-	ensure(sizeof(tainted<int*, DynLibNoSandbox>) == sizeof(int*));
+	ENSURE(sizeof(tainted<int, DynLibNoSandbox>) == sizeof(int));
+	ENSURE(sizeof(tainted<int*, DynLibNoSandbox>) == sizeof(int*));
 }
 void testAssignment()
 {
@@ -119,10 +120,10 @@ void testAssignment()
 	tainted<int, DynLibNoSandbox> c = b;
 	tainted<int, DynLibNoSandbox> d;
 	d = b;
-	ensure(a.UNSAFE_Unverified() == 4);
-	ensure(b.UNSAFE_Unverified() == 5);
-	ensure(c.UNSAFE_Unverified() == 5);
-	ensure(d.UNSAFE_Unverified() == 5);
+	ENSURE(a.UNSAFE_Unverified() == 4);
+	ENSURE(b.UNSAFE_Unverified() == 5);
+	ENSURE(c.UNSAFE_Unverified() == 5);
+	ENSURE(d.UNSAFE_Unverified() == 5);
 }
 
 void testBinaryOperators()
@@ -131,40 +132,40 @@ void testBinaryOperators()
 	tainted<int, DynLibNoSandbox> b = 3 + 4;
 	tainted<int, DynLibNoSandbox> c = a + 3;
 	tainted<int, DynLibNoSandbox> d = a + b;
-	ensure(a.UNSAFE_Unverified() == 3);
-	ensure(b.UNSAFE_Unverified() == 7);
-	ensure(c.UNSAFE_Unverified() == 6);
-	ensure(d.UNSAFE_Unverified() == 10);
+	ENSURE(a.UNSAFE_Unverified() == 3);
+	ENSURE(b.UNSAFE_Unverified() == 7);
+	ENSURE(c.UNSAFE_Unverified() == 6);
+	ENSURE(d.UNSAFE_Unverified() == 10);
 }
 
 void testDerefOperators()
 {
-	tainted<int*, DynLibNoSandbox> pa = sandbox->newInSandbox<int>();
+	tainted<int*, DynLibNoSandbox> pa = sandbox->mallocInSandbox<int>();
 	tainted_volatile<int, DynLibNoSandbox>& deref = *pa;
 	tainted<int, DynLibNoSandbox> deref2 = *pa;
 	deref2 = *pa;
-	(void)(deref);
-	(void)(deref2);
+	UNUSED(deref);
+	UNUSED(deref2);
 }
 
 void testVolatileDerefOperator()
 {
-	tainted<int**, DynLibNoSandbox> ppa = sandbox->newInSandbox<int*>();
-	*ppa = sandbox->newInSandbox<int>();
+	tainted<int**, DynLibNoSandbox> ppa = sandbox->mallocInSandbox<int*>();
+	*ppa = sandbox->mallocInSandbox<int>();
 	tainted<int, DynLibNoSandbox> a = **ppa;
-	(void)(a);
+	UNUSED(a);
 }
 
 void testAddressOfOperators()
 {
-	tainted<int*, DynLibNoSandbox> pa = sandbox->newInSandbox<int>();
+	tainted<int*, DynLibNoSandbox> pa = sandbox->mallocInSandbox<int>();
 	tainted<int*, DynLibNoSandbox> pa2 = &(*pa);
-	(void)(pa2);
+	UNUSED(pa2);
 }
 
 void testAppPointer()
 {
-	tainted<int**, DynLibNoSandbox> ppa = sandbox->newInSandbox<int*>();
+	tainted<int**, DynLibNoSandbox> ppa = sandbox->mallocInSandbox<int*>();
 	int* pa = new int;
 	*ppa = app_ptr(pa);
 }
@@ -172,10 +173,10 @@ void testAppPointer()
 void testFunctionInvocation()
 {
 	auto ret = sandbox_invoke_static(sandbox, simpleFunction);
-	ensure(ret.UNSAFE_Unverified() == 42);
+	ENSURE(ret.UNSAFE_Unverified() == 42);
 
 	auto ret2 = sandbox_invoke(sandbox, simpleFunction);
-	ensure(ret2.UNSAFE_Unverified() == 42);
+	ENSURE(ret2.UNSAFE_Unverified() == 42);
 }
 
 int main(int argc, char const *argv[])
