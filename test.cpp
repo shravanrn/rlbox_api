@@ -203,11 +203,15 @@ void testTwoVerificationFunctionFormats()
 	ENSURE(result2 == 5);
 }
 
-void testStackArrAndStringParams()
+void testStackAndHeapArrAndStringParams()
 {
-	auto result = sandbox_invoke(sandbox, simpleStrLenTest, sandbox->stackarr("Hello"))
+	auto result1 = sandbox_invoke(sandbox, simpleStrLenTest, sandbox->stackarr("Hello"))
 		.copyAndVerify([](size_t val) -> size_t { return (val <= 0 || val >= 10)? -1 : val; });
-	ENSURE(result == 5);
+	ENSURE(result1 == 5);
+
+	auto result2 = sandbox_invoke(sandbox, simpleStrLenTest, sandbox->heaparr("Hello"))
+		.copyAndVerify([](size_t val) -> size_t { return (val <= 0 || val >= 10)? -1 : val; });
+	ENSURE(result2 == 5);
 }
 
 int main(int argc, char const *argv[])
@@ -222,6 +226,6 @@ int main(int argc, char const *argv[])
 	testAppPointer();
 	testFunctionInvocation();
 	testTwoVerificationFunctionFormats();
-	testStackArrAndStringParams();
+	testStackAndHeapArrAndStringParams();
 	return 0;
 }

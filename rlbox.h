@@ -111,6 +111,7 @@ namespace rlbox
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	//sandbox_stackarr_helper and sandbox_heaparr_helper implement move semantics as they are RAII
 	template <typename T, typename TSandbox>
 	class sandbox_stackarr_helper : public sandbox_wrapper_base
 	{
@@ -145,6 +146,41 @@ namespace rlbox
 			if(field != nullptr)
 			{
 				sandbox->impl_popStackArr((my_remove_const_t<T>*) field, arrSize);
+			}
+		}
+
+		inline T* UNSAFE_Unverified() const noexcept { return field; }
+	};
+
+	template <typename T, typename TSandbox>
+	class sandbox_heaparr_helper : public sandbox_wrapper_base
+	{
+	public:
+		TSandbox* sandbox;
+		T* field;
+
+		sandbox_heaparr_helper() = default;
+		sandbox_heaparr_helper(sandbox_heaparr_helper&) = default;
+		sandbox_heaparr_helper(sandbox_heaparr_helper&& other)
+		{
+			field = other.field;
+			other.field = nullptr;
+		}
+
+		sandbox_heaparr_helper& operator=(const sandbox_heaparr_helper&& other)  
+		{
+			if (this != &other)  
+			{
+				field = other.field;
+				other.field = nullptr;
+			}
+		}
+
+		~sandbox_heaparr_helper()
+		{
+			if(field != nullptr)
+			{
+				sandbox->impl_freeInSandbox((my_remove_const_t<T>*) field);
 			}
 		}
 
@@ -508,6 +544,26 @@ namespace rlbox
 		inline sandbox_stackarr_helper<char, TSandbox> stackarr(char* str)
 		{
 			return stackarr(str, strlen(str) + 1);
+		}
+
+		template <typename T>
+		inline sandbox_heaparr_helper<T, TSandbox> heaparr(T* arg, size_t size)
+		{
+			T* argInSandbox = (T*) this->impl_mallocInSandbox(size);
+			memcpy((void*) argInSandbox, (void*) arg, size);
+
+			sandbox_heaparr_helper<T, TSandbox> ret;
+			ret.sandbox = this;
+			ret.field = argInSandbox;
+			return ret;
+		}
+		inline sandbox_heaparr_helper<const char, TSandbox> heaparr(const char* str)
+		{
+			return heaparr(str, strlen(str) + 1);
+		}
+		inline sandbox_heaparr_helper<char, TSandbox> heaparr(char* str)
+		{
+			return heaparr(str, strlen(str) + 1);
 		}
 	};
 
