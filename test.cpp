@@ -15,6 +15,7 @@ class DynLibNoSandbox
 private:
 	void* allowedFunctions[32];
 	void* libHandle = nullptr;
+	int pushPopCount = 0;
 
 public:
 	void impl_CreateSandbox(const char* sandboxRuntimePath, const char* libraryPath)
@@ -33,6 +34,17 @@ public:
 	void impl_freeInSandbox(void* val)
 	{
 		free(val);
+	}
+	void* impl_pushStackArr(size_t size)
+	{
+		pushPopCount++;
+		return malloc(size);
+	}
+	void impl_popStackArr(void* ptr, size_t size)
+	{
+		pushPopCount--;
+		ENSURE(pushPopCount >= 0);
+		return free(ptr);
 	}
 
 	static inline void* impl_GetUnsandboxedPointer(void* p)
@@ -167,7 +179,7 @@ void testAppPointer()
 {
 	tainted<int**, DynLibNoSandbox> ppa = sandbox->mallocInSandbox<int*>();
 	int* pa = new int;
-	*ppa = app_ptr(pa);
+	*ppa = sandbox->app_ptr(pa);
 }
 
 void testFunctionInvocation()
@@ -178,6 +190,24 @@ void testFunctionInvocation()
 
 	auto ret2 = sandbox_invoke(sandbox, simpleAddTest, a, 22);
 	ENSURE(ret2.UNSAFE_Unverified() == 42);
+}
+
+void testTwoVerificationFunctionFormats()
+{
+	auto result1 = sandbox_invoke(sandbox, simpleAddTest, 2, 3)
+		.copyAndVerify([](int val){ return val > 0 && val < 10? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE;}, -1);
+	ENSURE(result1 == 5);
+
+	auto result2 = sandbox_invoke(sandbox, simpleAddTest, 2, 3)
+		.copyAndVerify([](int val){ return val > 0 && val < 10? val : -1;});
+	ENSURE(result2 == 5);
+}
+
+void testStackArrAndStringParams()
+{
+	auto result = sandbox_invoke(sandbox, simpleStrLenTest, sandbox->stackarr("Hello"))
+		.copyAndVerify([](size_t val) -> size_t { return (val <= 0 || val >= 10)? -1 : val; });
+	ENSURE(result == 5);
 }
 
 int main(int argc, char const *argv[])
@@ -191,5 +221,7 @@ int main(int argc, char const *argv[])
 	testAddressOfOperators();
 	testAppPointer();
 	testFunctionInvocation();
+	testTwoVerificationFunctionFormats();
+	testStackArrAndStringParams();
 	return 0;
 }

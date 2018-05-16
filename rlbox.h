@@ -4,6 +4,7 @@
 #include <functional>
 #include <type_traits>
 #include <map>
+#include <string.h>
 
 namespace rlbox
 {
@@ -76,6 +77,9 @@ namespace rlbox
 	template<typename T>
 	constexpr bool my_is_void_v = std::is_void<T>::value;
 
+	template<typename T>
+	using my_remove_const_t = typename std::remove_const<T>::type;	
+
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//Some additional helpers
 
@@ -91,25 +95,61 @@ namespace rlbox
 
 	class sandbox_wrapper_base {};
 
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	template <typename T>
-	class app_ptr_wrapper : sandbox_wrapper_base
+	class sandbox_app_ptr_wrapper : public sandbox_wrapper_base
 	{
 	private:
 		T* field;
 	public:
  		template<typename U>
-		friend app_ptr_wrapper<U> app_ptr(U* arg);
+		friend class RLBoxSandbox;
 
 		inline T* UNSAFE_Unverified() const noexcept { return field; }
 	};
 
-	template<typename T>
-	inline app_ptr_wrapper<T> app_ptr(T* arg)
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template <typename T, typename TSandbox>
+	class sandbox_stackarr_helper : public sandbox_wrapper_base
 	{
-		app_ptr_wrapper<T> ret;
-		ret.field = arg;
-		return ret;
-	}
+	public:
+		TSandbox* sandbox;
+		T* field;
+		size_t arrSize;
+
+		sandbox_stackarr_helper() = default;
+		sandbox_stackarr_helper(sandbox_stackarr_helper&) = default;
+		sandbox_stackarr_helper(sandbox_stackarr_helper&& other)
+		{
+			field = other.field;
+			arrSize = other.arrSize;
+			other.field = nullptr;
+			other.arrSize = 0;
+		}
+
+		sandbox_stackarr_helper& operator=(const sandbox_stackarr_helper&& other)  
+		{
+			if (this != &other)  
+			{
+				field = other.field;
+				arrSize = other.arrSize;
+				other.field = nullptr;
+				other.arrSize = 0;
+			}
+		}
+
+		~sandbox_stackarr_helper()
+		{
+			if(field != nullptr)
+			{
+				sandbox->impl_popStackArr((my_remove_const_t<T>*) field, arrSize);
+			}
+		}
+
+		inline T* UNSAFE_Unverified() const noexcept { return field; }
+	};
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -300,7 +340,7 @@ namespace rlbox
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_pointer_v<T> && my_is_assignable_v<T&, TRHS*>)>
-		inline tainted_volatile<T, TSandbox>& operator=(const app_ptr_wrapper<TRHS>& arg) noexcept
+		inline tainted_volatile<T, TSandbox>& operator=(const sandbox_app_ptr_wrapper<TRHS>& arg) noexcept
 		{
 			field = arg.UNSAFE_Unverified();
 			return *this;
@@ -351,13 +391,13 @@ namespace rlbox
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
-	inline T sandbox_removeWrapper(T arg)
+	inline T sandbox_removeWrapper(T& arg)
 	{
 		return arg;
 	}
 
 	template<typename TRHS, typename... TRHSRem, template<typename, typename...> typename TWrap, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
-	inline auto sandbox_removeWrapper(TWrap<TRHS, TRHSRem...> arg) -> decltype(arg.UNSAFE_Unverified())
+	inline auto sandbox_removeWrapper(TWrap<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_Unverified())
 	{
 		return arg.UNSAFE_Unverified();
 	}
@@ -390,13 +430,13 @@ namespace rlbox
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(my_is_same_v<return_argument<T>, void>)>
-		void invokeStatic(T* fnPtr, TArgs... params)
+		void invokeStatic(T* fnPtr, TArgs&&... params)
 		{
 			fnPtr(sandbox_removeWrapper(params)...);
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_same_v<return_argument<T>, void>)>
-		tainted<return_argument<T>, TSandbox> invokeStatic(T* fnPtr, TArgs... params)
+		tainted<return_argument<T>, TSandbox> invokeStatic(T* fnPtr, TArgs&&... params)
 		{
 			return_argument<T> fnRet = fnPtr(sandbox_removeWrapper(params)...);
 			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
@@ -404,13 +444,13 @@ namespace rlbox
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(my_is_same_v<return_argument<T>, void>)>
-		void invokeWithFunctionPointer(T* fnPtr, TArgs... params)
+		void invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
 			this->invokeFunction(fnPtr, sandbox_removeWrapper(params)...);
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_same_v<return_argument<T>, void>)>
-		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs... params)
+		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
 			return_argument<T> fnRet = this->invokeFunction(fnPtr, sandbox_removeWrapper(params)...);
 			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
@@ -439,6 +479,35 @@ namespace rlbox
 			}
 
 			return fnPtr;
+		}
+
+		template<typename T>
+		inline sandbox_app_ptr_wrapper<T> app_ptr(T* arg)
+		{
+			sandbox_app_ptr_wrapper<T> ret;
+			ret.field = arg;
+			return ret;
+		}
+
+		template <typename T>
+		inline sandbox_stackarr_helper<T, TSandbox> stackarr(T* arg, size_t size)
+		{
+			T* argInSandbox = (T*) this->impl_pushStackArr(size);
+			memcpy((void*) argInSandbox, (void*) arg, size);
+
+			sandbox_stackarr_helper<T, TSandbox> ret;
+			ret.sandbox = this;
+			ret.field = argInSandbox;
+			ret.arrSize = size;
+			return ret;
+		}
+		inline sandbox_stackarr_helper<const char, TSandbox> stackarr(const char* str)
+		{
+			return stackarr(str, strlen(str) + 1);
+		}
+		inline sandbox_stackarr_helper<char, TSandbox> stackarr(char* str)
+		{
+			return stackarr(str, strlen(str) + 1);
 		}
 	};
 
