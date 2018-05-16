@@ -1,6 +1,13 @@
 #ifndef RLBOX_API
 #define RLBOX_API
 
+////////////////////////////////////////////////////////////////////////////////////////////////
+//RLBOX API as defined in "RLBOX: Robust Library Sandboxing"                                  //
+//                                                                                            //
+//Compatible with C++ 11                                                                      //
+//This API is designed so that an application can safely interact with sandboxed libraries.   //
+////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include <functional>
 #include <type_traits>
 #include <map>
@@ -12,23 +19,9 @@ namespace rlbox
 	struct UNUSED_PACK_HELPER { template<typename ...Args> UNUSED_PACK_HELPER(Args const & ... ) {} };
 	#define UNUSED(x) rlbox_api_detail::UNUSED_PACK_HELPER {x}
 
-	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
-	template<typename Ret, typename... Rest>
-	Ret return_argument_helper(Ret(*) (Rest...));
-
-	template<typename Ret, typename F, typename... Rest>
-	Ret return_argument_helper(Ret(F::*) (Rest...));
-
-	template<typename Ret, typename F, typename... Rest>
-	Ret return_argument_helper(Ret(F::*) (Rest...) const);
-
-	template <typename F>
-	decltype(return_argument_helper(&F::operator())) return_argument_helper(F);
-
-	template <typename T>
-	using return_argument = decltype(return_argument_helper(std::declval<T>()));
-
 	//C++11 doesn't have the _t and _v convenience helpers, so create these
+	//Note the _v variants uses one C++ 14 feature we use ONLY FOR convenience. This generates some warnings that can be ignored.
+	//To be fully C++11 compatible, we should inline the _v helpers below
 	template<bool T, typename V>
 	using my_enable_if_t = typename std::enable_if<T, V>::type;
 
@@ -78,7 +71,10 @@ namespace rlbox
 	constexpr bool my_is_void_v = std::is_void<T>::value;
 
 	template<typename T>
-	using my_remove_const_t = typename std::remove_const<T>::type;	
+	using my_remove_const_t = typename std::remove_const<T>::type;
+
+	template<typename T>
+	using my_add_lvalue_reference_t = typename std::add_lvalue_reference<T>::type;
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//Some additional helpers
@@ -90,6 +86,63 @@ namespace rlbox
 
 	template<typename T>
 	using my_array_element_t = my_remove_reference_t<decltype(*(std::declval<T>()))>;
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	//https://github.com/facebook/folly/blob/master/folly/functional/Invoke.h
+	//mimic C++17's std::invocable
+	namespace invoke_detail {
+
+		template< class... >
+		using void_t = void;
+
+		template <typename F, typename... Args>
+		constexpr auto invoke(F&& f, Args&&... args) noexcept(
+			noexcept(static_cast<F&&>(f)(static_cast<Args&&>(args)...)))
+			-> decltype(static_cast<F&&>(f)(static_cast<Args&&>(args)...)) {
+		return static_cast<F&&>(f)(static_cast<Args&&>(args)...);
+		}
+		template <typename M, typename C, typename... Args>
+		constexpr auto invoke(M(C::*d), Args&&... args)
+			-> decltype(std::mem_fn(d)(static_cast<Args&&>(args)...)) {
+		return std::mem_fn(d)(static_cast<Args&&>(args)...);
+		}
+
+		template <typename F, typename... Args>
+		using invoke_result_ =
+		decltype(invoke(std::declval<F>(), std::declval<Args>()...));
+
+		template <typename Void, typename F, typename... Args>
+		struct is_invocable : std::false_type {};
+
+		template <typename F, typename... Args>
+		struct is_invocable<void_t<invoke_result_<F, Args...>>, F, Args...>
+		: std::true_type {};
+	}
+
+	template <typename F, typename... Args>
+	struct my_is_invocable : invoke_detail::is_invocable<void, F, Args...> {};
+	
+	template<typename F, typename... Args>
+	constexpr bool my_is_invocable_v = my_is_invocable<F, Args...>::value;
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
+	template<typename Ret, typename... Rest>
+	Ret return_argument_helper(Ret(*) (Rest...));
+
+	template<typename Ret, typename F, typename... Rest>
+	Ret return_argument_helper(Ret(F::*) (Rest...));
+
+	template<typename Ret, typename F, typename... Rest>
+	Ret return_argument_helper(Ret(F::*) (Rest...) const);
+
+	template <typename F>
+	decltype(return_argument_helper(&F::operator())) return_argument_helper(F);
+
+	template <typename T>
+	using return_argument = decltype(return_argument_helper(std::declval<T>()));
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -231,7 +284,7 @@ namespace rlbox
 	private:
 		T field;
 
-		template<typename TRHS, template <typename, typename> typename TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
+		template<typename TRHS, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
 		inline TRHS unwrap(const TWrap<TRHS, TSandbox> rhs) const noexcept
 		{
 			return rhs.UNSAFE_Unverified();
@@ -432,11 +485,14 @@ namespace rlbox
 		return arg;
 	}
 
-	template<typename TRHS, typename... TRHSRem, template<typename, typename...> typename TWrap, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
+	template<typename TRHS, typename... TRHSRem, template<typename, typename...> class TWrap, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
 	inline auto sandbox_removeWrapper(TWrap<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_Unverified())
 	{
 		return arg.UNSAFE_Unverified();
 	}
+
+	template <typename T>
+	using sandbox_removeWrapper_t = decltype(sandbox_removeWrapper(std::declval<my_add_lvalue_reference_t<T>>()));
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -465,13 +521,13 @@ namespace rlbox
 			return ret;
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(my_is_same_v<return_argument<T>, void>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		void invokeStatic(T* fnPtr, TArgs&&... params)
 		{
 			fnPtr(sandbox_removeWrapper(params)...);
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_same_v<return_argument<T>, void>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeStatic(T* fnPtr, TArgs&&... params)
 		{
 			return_argument<T> fnRet = fnPtr(sandbox_removeWrapper(params)...);
@@ -479,16 +535,16 @@ namespace rlbox
 			return ret;
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(my_is_same_v<return_argument<T>, void>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		void invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
-			this->invokeFunction(fnPtr, sandbox_removeWrapper(params)...);
+			this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(params)...);
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_same_v<return_argument<T>, void>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
-			return_argument<T> fnRet = this->invokeFunction(fnPtr, sandbox_removeWrapper(params)...);
+			return_argument<T> fnRet = this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(params)...);
 			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
 			return ret;
 		}
@@ -506,7 +562,7 @@ namespace rlbox
 
 			if(fnPtrRef == fnMapTyped.end())
 			{
-				fnPtr = this->lookupSymbol(fnName);
+				fnPtr = this->impl_LookupSymbol(fnName);
 				fnMapTyped[fnName] = fnPtr;
 			}
 			else

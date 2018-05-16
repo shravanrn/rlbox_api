@@ -3,6 +3,17 @@
 #include <dlfcn.h>
 
 #include "libtest.h"
+
+template<typename... T>
+void printTypes()
+{
+	#ifdef _MSC_VER
+ 		printf("%s\n", __FUNCSIG__);
+ 	#else
+ 		printf("%s\n", __PRETTY_FUNCTION__);
+ 	#endif
+}
+
 #include "rlbox.h"
 
 using namespace rlbox;
@@ -63,11 +74,11 @@ public:
 	}
 
 	template<typename T, typename std::enable_if<std::is_function<T>::value || std::is_member_function_pointer<T*>::value>::type* = nullptr>
-	void* registerCallback(T* callback)
+	void* impl_RegisterCallback(T* callback)
 	{
 		for(unsigned int i = 0; i < sizeof(allowedFunctions)/sizeof(void*); i++)
 		{
-			if(allowedFunctions == nullptr)
+			if(allowedFunctions[i] == nullptr)
 			{
 				allowedFunctions[i] = (void*)(uintptr_t) callback;
 				return callback;
@@ -77,7 +88,7 @@ public:
 		return nullptr;
 	}
 
-	void unregisterCallback(void* callback)
+	void impl_UnregisterCallback(void* callback)
 	{
 		for(unsigned int i = 0; i < sizeof(allowedFunctions)/sizeof(void*); i++)
 		{
@@ -89,7 +100,7 @@ public:
 		}
 	}
 
-	void* lookupSymbol(const char* name)
+	void* impl_LookupSymbol(const char* name)
 	{
 		auto ret = dlsym(libHandle, name);
 		if(!ret)
@@ -101,23 +112,13 @@ public:
 	}
 
 	template <typename T, typename ... TArgs>
-	return_argument<T> invokeFunction(T* fnPtr, TArgs... params)
+	return_argument<T> impl_InvokeFunction(T* fnPtr, TArgs... params)
 	{
 		return (*fnPtr)(params...);
 	}
 };
 
 RLBoxSandbox<DynLibNoSandbox>* sandbox;
-
-template<typename T>
-void printType()
-{
-	#ifdef _MSC_VER
- 		printf("%s\n", __FUNCSIG__);
- 	#else
- 		printf("%s\n", __PRETTY_FUNCTION__);
- 	#endif
-}
 
 void testSizes()
 {
