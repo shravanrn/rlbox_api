@@ -76,6 +76,12 @@ namespace rlbox
 	template<typename T>
 	using my_add_lvalue_reference_t = typename std::add_lvalue_reference<T>::type;
 
+	template<typename T>
+	constexpr bool my_is_function_v = std::is_function<T>::value;
+
+	template< class T >
+	using my_decay_t = typename std::decay<T>::type;
+
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//Some additional helpers
 
@@ -168,17 +174,24 @@ namespace rlbox
 	template <typename T, typename TSandbox>
 	class sandbox_stackarr_helper : public sandbox_wrapper_base
 	{
-	public:
+	private:
 		TSandbox* sandbox;
 		T* field;
 		size_t arrSize;
+	public:
 
-		sandbox_stackarr_helper() = default;
-		sandbox_stackarr_helper(sandbox_stackarr_helper&) = default;
+		sandbox_stackarr_helper(TSandbox* sandbox, T* field, size_t arrSize)
+		{
+			this->sandbox = sandbox;
+			this->field = field;
+			this->arrSize = arrSize;
+		}
 		sandbox_stackarr_helper(sandbox_stackarr_helper&& other)
 		{
+			sandbox = other.sandbox;
 			field = other.field;
 			arrSize = other.arrSize;
+			other.sandbox = nullptr;
 			other.field = nullptr;
 			other.arrSize = 0;
 		}
@@ -187,8 +200,10 @@ namespace rlbox
 		{
 			if (this != &other)  
 			{
+				sandbox = other.sandbox;
 				field = other.field;
 				arrSize = other.arrSize;
+				other.sandbox = nullptr;
 				other.field = nullptr;
 				other.arrSize = 0;
 			}
@@ -208,23 +223,31 @@ namespace rlbox
 	template <typename T, typename TSandbox>
 	class sandbox_heaparr_helper : public sandbox_wrapper_base
 	{
-	public:
+	private:
 		TSandbox* sandbox;
 		T* field;
+	public:
 
-		sandbox_heaparr_helper() = default;
-		sandbox_heaparr_helper(sandbox_heaparr_helper&) = default;
 		sandbox_heaparr_helper(sandbox_heaparr_helper&& other)
 		{
+			sandbox = other.sandbox;
 			field = other.field;
+			other.sandbox = nullptr;
 			other.field = nullptr;
+		}
+		sandbox_heaparr_helper(TSandbox* sandbox, T* field)
+		{
+			this->sandbox = sandbox;
+			this->field = field;
 		}
 
 		sandbox_heaparr_helper& operator=(const sandbox_heaparr_helper&& other)  
 		{
 			if (this != &other)  
 			{
+				sandbox = other.sandbox;
 				field = other.field;
+				other.sandbox = nullptr;
 				other.field = nullptr;
 			}
 		}
@@ -239,6 +262,71 @@ namespace rlbox
 
 		inline T* UNSAFE_Unverified() const noexcept { return field; }
 	};
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template <typename T, typename TSandbox>
+	class sandbox_callback_helper : public sandbox_wrapper_base
+	{
+	private:
+		TSandbox* sandbox;
+		T* registeredCallback;
+	public:
+
+		sandbox_callback_helper(TSandbox* sandbox, T* registeredCallback)
+		{
+			this->sandbox = sandbox;
+			this->registeredCallback = registeredCallback;
+		}
+		sandbox_callback_helper(sandbox_callback_helper&& other)
+		{
+			registeredCallback = other.registeredCallback;
+			sandbox = other.sandbox;
+			other.registeredCallback = nullptr;
+			other.sandbox = nullptr;
+		}
+
+		sandbox_callback_helper& operator=(const sandbox_callback_helper&& other)  
+		{
+			if (this != &other)  
+			{
+				registeredCallback = other.registeredCallback;
+				sandbox = other.sandbox;
+				other.registeredCallback = nullptr;
+				other.sandbox = nullptr;
+			}
+		}
+
+		~sandbox_callback_helper()
+		{
+			if(registeredCallback != nullptr)
+			{
+				sandbox->impl_UnregisterCallback(registeredCallback);
+			}
+		}
+
+		inline T* UNSAFE_Unverified() const noexcept { return registeredCallback; }
+	};
+
+	template <typename TFunc, typename TSandbox>
+	class sandbox_callback_state
+	{
+	public:
+		TSandbox * const sandbox;
+		TFunc * const actualCallback;
+		sandbox_callback_state(TSandbox* sandbox, TFunc* actualCallback)
+		{
+			this->sandbox = sandbox;
+			this->actualCallback = actualCallback;
+		}
+	};
+
+	template <typename TRet, typename... TArgs, typename TSandbox>
+	__attribute__ ((noinline)) TRet sandbox_callback_receiver(TArgs... params, void* state)
+	{
+		auto stateObj = (sandbox_callback_state<TRet(tainted<TArgs>...), TSandbox>*) state;
+		return stateObj->actualCallback(sandbox_convertToUnverified(params)...);
+	}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -313,19 +401,22 @@ namespace rlbox
 		template<typename Arg, typename... Args, ENABLE_IF(!my_is_base_of_v<tainted_base<T, TSandbox>, my_remove_reference_t<Arg>> && my_is_fundamental_v<T>)>
 		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) { }
 
-		inline T UNSAFE_Unverified() const noexcept
+		template<typename T2=T, ENABLE_IF(!my_is_array_v<T2>)>
+		inline T2 UNSAFE_Unverified() const noexcept
 		{
 			return field;
 		}
 
+		//Even though this function is not enabled for array types, the C++ compiler complains that this is a a function that
+		//	accepts a "function type" param that returns an array type. So we decay the type for array types
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
-		inline T copyAndVerify(std::function<T(T)> verifyFunction) const
+		inline T2 copyAndVerify(std::function<my_conditional_t<my_is_array_v<T>, my_decay_t<T>, T>(T)> verifyFunction) const
 		{
 			return verifyFunction(field);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
-		inline T copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
+		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			return verifyFunction(field) == RLBox_Verify_Status::SAFE? field : defaultValue;
 		}
@@ -496,6 +587,17 @@ namespace rlbox
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	template<typename TSandbox, typename Ret>
+	std::true_type sandbox_callback_all_args_are_tainted_helper(Ret(*) ());
+
+	template<typename TSandbox, typename Ret, typename First, typename... Rest, ENABLE_IF(decltype(sandbox_callback_all_args_are_tainted_helper<TSandbox>(std::declval<Ret (*)(Rest...)>()))::value)>
+	std::true_type sandbox_callback_all_args_are_tainted_helper(Ret(*) (tainted<First, TSandbox>, Rest...));
+
+	template <typename TSandbox, typename TFunc>
+	using sandbox_callback_all_args_are_tainted = decltype(sandbox_callback_all_args_are_tainted_helper(std::declval<TFunc>()));
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	template<typename TSandbox>
 	class RLBoxSandbox : protected TSandbox
 	{
@@ -587,10 +689,7 @@ namespace rlbox
 			T* argInSandbox = (T*) this->impl_pushStackArr(size);
 			memcpy((void*) argInSandbox, (void*) arg, size);
 
-			sandbox_stackarr_helper<T, TSandbox> ret;
-			ret.sandbox = this;
-			ret.field = argInSandbox;
-			ret.arrSize = size;
+			sandbox_stackarr_helper<T, TSandbox> ret(this, argInSandbox, size);
 			return ret;
 		}
 		inline sandbox_stackarr_helper<const char, TSandbox> stackarr(const char* str)
@@ -608,9 +707,7 @@ namespace rlbox
 			T* argInSandbox = (T*) this->impl_mallocInSandbox(size);
 			memcpy((void*) argInSandbox, (void*) arg, size);
 
-			sandbox_heaparr_helper<T, TSandbox> ret;
-			ret.sandbox = this;
-			ret.field = argInSandbox;
+			sandbox_heaparr_helper<T, TSandbox> ret(this, argInSandbox);
 			return ret;
 		}
 		inline sandbox_heaparr_helper<const char, TSandbox> heaparr(const char* str)
@@ -621,6 +718,16 @@ namespace rlbox
 		{
 			return heaparr(str, strlen(str) + 1);
 		}
+
+		template <typename TRet, typename... TArgs, ENABLE_IF(sandbox_callback_all_args_are_tainted<TSandbox, TRet(*)(TArgs...)>::value && my_is_function_v<T>)>
+		__attribute__ ((noinline))
+		sandbox_callback_helper<T, TSandbox> createCallback(TRet(*fnPtr)(TArgs...))
+		{
+			auto stateObject = new sandbox_callback_state<T, TSandbox>(this, fnPtr);
+			auto callbackRegisteredAddress = this->impl_RegisterCallback(sandbox_callback_receiver<TRet, TArgs..., TSandbox>, (void*)stateObject);
+			return sandbox_callback_helper<T, TSandbox>(this, callbackRegisteredAddress);
+		}
+
 	};
 
 	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)

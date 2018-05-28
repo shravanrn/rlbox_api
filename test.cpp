@@ -74,7 +74,7 @@ public:
 	}
 
 	template<typename T, typename std::enable_if<std::is_function<T>::value || std::is_member_function_pointer<T*>::value>::type* = nullptr>
-	void* impl_RegisterCallback(T* callback)
+	void* impl_RegisterCallback(T* callback, void* state)
 	{
 		for(unsigned int i = 0; i < sizeof(allowedFunctions)/sizeof(void*); i++)
 		{
@@ -88,11 +88,12 @@ public:
 		return nullptr;
 	}
 
-	void impl_UnregisterCallback(void* callback)
+	template<typename T, typename std::enable_if<std::is_function<T>::value || std::is_member_function_pointer<T*>::value>::type* = nullptr>
+	void impl_UnregisterCallback(T* callback)
 	{
 		for(unsigned int i = 0; i < sizeof(allowedFunctions)/sizeof(void*); i++)
 		{
-			if(allowedFunctions == callback)
+			if(allowedFunctions == (void*)(uintptr_t)callback)
 			{
 				allowedFunctions[i] = nullptr;
 				break;
@@ -213,6 +214,34 @@ void testStackAndHeapArrAndStringParams()
 	auto result2 = sandbox_invoke(sandbox, simpleStrLenTest, sandbox->heaparr("Hello"))
 		.copyAndVerify([](size_t val) -> size_t { return (val <= 0 || val >= 10)? -1 : val; });
 	ENSURE(result2 == 5);
+}
+
+int exampleCallback(tainted<unsigned, DynLibNoSandbox> a, tainted<const char*, DynLibNoSandbox> b, tainted<unsigned[1], DynLibNoSandbox> c)
+{
+	// auto aCopy = a.copyAndVerify([](unsigned val){ return val > 0 && val < 100? val : -1; });
+	// auto bCopy = b.copyAndVerifyString([](const char* val) { return strlen(val) < 100; }, nullptr);
+	// unsigned cCopy[1];
+	// c.copyAndVerify(cCopy, sizeof(cCopy), [](unsigned* arr, size_t arrSize){ UNUSED(arrSize); unsigned val = *arr; return val > 0 && val < 100; });
+	// if(cCopy[0] + 1 != aCopy)
+	// {
+	// 	printf("Unexpected callback value: %d, %d\n", cCopy[0] + 1, aCopy);
+	// 	exit(1);
+	// }
+	// return aCopy + strlen(bCopy);
+	return 0;
+}
+
+void testCallback()
+{
+	auto registeredCallback = sandbox->createCallback(exampleCallback);
+	// auto result = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), registeredCallback)
+	// 	.copyAndVerify([](int val){ return val > 0 && val < 100;}, -1);
+	// if(result != 10)
+	// {
+	// 	printf("Dyn loader Test 4: Failed\n");
+	// 	*testResult = 0;
+	// 	return NULL;
+	// }
 }
 
 int main(int argc, char const *argv[])
