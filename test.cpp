@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <type_traits>
 #include <dlfcn.h>
-
+#include <iostream>
 #include "libtest.h"
 
 template<typename... T>
@@ -21,10 +21,14 @@ using namespace rlbox;
 #define ENSURE(a) if(!(a)) { printf("%s check failed\n", #a); exit(1); }
 #define UNUSED(a) (void)(a)
 
+class DynLibNoSandbox;
+thread_local DynLibNoSandbox* dynLibNoSandbox_SavedState = nullptr;
+
 class DynLibNoSandbox
 {
 private:
 	void* allowedFunctions[32];
+	void* functionState[32];
 	void* libHandle = nullptr;
 	int pushPopCount = 0;
 
@@ -73,29 +77,39 @@ public:
 		return p;
 	}
 
-	template<typename T, typename std::enable_if<std::is_function<T>::value || std::is_member_function_pointer<T*>::value>::type* = nullptr>
-	void* impl_RegisterCallback(T* callback, void* state)
+	template<typename TRet, typename... TArgs> 
+	static TRet impl_CallbackReceiver0(TArgs... params)
+	{
+		using fnType = TRet(*)(TArgs..., void*);
+		fnType fnPtr = (fnType)(uintptr_t) dynLibNoSandbox_SavedState->allowedFunctions[0];
+		return fnPtr(params..., dynLibNoSandbox_SavedState->functionState[0]);
+	}
+
+	template<typename TRet, typename... TArgs>
+	void* impl_RegisterCallback(void* callback, void* state)
 	{
 		for(unsigned int i = 0; i < sizeof(allowedFunctions)/sizeof(void*); i++)
 		{
 			if(allowedFunctions[i] == nullptr)
 			{
 				allowedFunctions[i] = (void*)(uintptr_t) callback;
-				return callback;
+				functionState[i] = state;
+				return (void*)(uintptr_t) impl_CallbackReceiver0<TRet, TArgs...>;
 			}
 		}
 
 		return nullptr;
 	}
 
-	template<typename T, typename std::enable_if<std::is_function<T>::value || std::is_member_function_pointer<T*>::value>::type* = nullptr>
-	void impl_UnregisterCallback(T* callback)
+	template<typename TRet, typename... TArgs>
+	void impl_UnregisterCallback(TRet(*callback)(TArgs...))
 	{
 		for(unsigned int i = 0; i < sizeof(allowedFunctions)/sizeof(void*); i++)
 		{
 			if(allowedFunctions == (void*)(uintptr_t)callback)
 			{
 				allowedFunctions[i] = nullptr;
+				functionState[i] = nullptr;
 				break;
 			}
 		}
@@ -115,6 +129,7 @@ public:
 	template <typename T, typename ... TArgs>
 	return_argument<T> impl_InvokeFunction(T* fnPtr, TArgs... params)
 	{
+		dynLibNoSandbox_SavedState = this;
 		return (*fnPtr)(params...);
 	}
 };
@@ -218,8 +233,8 @@ void testStackAndHeapArrAndStringParams()
 
 int exampleCallback(tainted<unsigned, DynLibNoSandbox> a, tainted<const char*, DynLibNoSandbox> b, tainted<unsigned[1], DynLibNoSandbox> c)
 {
-	// auto aCopy = a.copyAndVerify([](unsigned val){ return val > 0 && val < 100? val : -1; });
-	// auto bCopy = b.copyAndVerifyString([](const char* val) { return strlen(val) < 100; }, nullptr);
+	auto aCopy = a.copyAndVerify([](unsigned val){ return val > 0 && val < 100? val : -1; });
+	auto bCopy = b.copyAndVerifyString([](const char* val) { return strlen(val) < 100; }, nullptr);
 	// unsigned cCopy[1];
 	// c.copyAndVerify(cCopy, sizeof(cCopy), [](unsigned* arr, size_t arrSize){ UNUSED(arrSize); unsigned val = *arr; return val > 0 && val < 100; });
 	// if(cCopy[0] + 1 != aCopy)
@@ -234,14 +249,11 @@ int exampleCallback(tainted<unsigned, DynLibNoSandbox> a, tainted<const char*, D
 void testCallback()
 {
 	auto registeredCallback = sandbox->createCallback(exampleCallback);
-	// auto result = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), registeredCallback)
-	// 	.copyAndVerify([](int val){ return val > 0 && val < 100;}, -1);
-	// if(result != 10)
-	// {
-	// 	printf("Dyn loader Test 4: Failed\n");
-	// 	*testResult = 0;
-	// 	return NULL;
-	// }
+	auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), registeredCallback);
+
+	auto result = resultT
+		.copyAndVerify([](int val){ return val > 0 && val < 100? val : -1; });
+	ENSURE(result == 10);
 }
 
 int main(int argc, char const *argv[])
@@ -257,5 +269,6 @@ int main(int argc, char const *argv[])
 	testFunctionInvocation();
 	testTwoVerificationFunctionFormats();
 	testStackAndHeapArrAndStringParams();
+	testCallback();
 	return 0;
 }

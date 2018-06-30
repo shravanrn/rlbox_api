@@ -93,6 +93,9 @@ namespace rlbox
 	template<typename T>
 	using my_array_element_t = my_remove_reference_t<decltype(*(std::declval<T>()))>;
 
+	template<typename T>
+	using my_decay_if_array_t = my_conditional_t<my_is_array_v<T>, my_decay_t<T>, T>;
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	//https://github.com/facebook/folly/blob/master/folly/functional/Invoke.h
@@ -154,10 +157,13 @@ namespace rlbox
 
 	class sandbox_wrapper_base {};
 
+	template<typename T>
+	class sandbox_wrapper_base_of {};
+
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <typename T>
-	class sandbox_app_ptr_wrapper : public sandbox_wrapper_base
+	class sandbox_app_ptr_wrapper : public sandbox_wrapper_base, public sandbox_wrapper_base_of<T*>
 	{
 	private:
 		T* field;
@@ -172,7 +178,7 @@ namespace rlbox
 
 	//sandbox_stackarr_helper and sandbox_heaparr_helper implement move semantics as they are RAII
 	template <typename T, typename TSandbox>
-	class sandbox_stackarr_helper : public sandbox_wrapper_base
+	class sandbox_stackarr_helper : public sandbox_wrapper_base, public sandbox_wrapper_base_of<T*>
 	{
 	private:
 		TSandbox* sandbox;
@@ -221,7 +227,7 @@ namespace rlbox
 	};
 
 	template <typename T, typename TSandbox>
-	class sandbox_heaparr_helper : public sandbox_wrapper_base
+	class sandbox_heaparr_helper : public sandbox_wrapper_base, public sandbox_wrapper_base_of<T*>
 	{
 	private:
 		TSandbox* sandbox;
@@ -266,7 +272,7 @@ namespace rlbox
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <typename T, typename TSandbox>
-	class sandbox_callback_helper : public sandbox_wrapper_base
+	class sandbox_callback_helper : public sandbox_wrapper_base, public sandbox_wrapper_base_of<T*>
 	{
 	private:
 		TSandbox* sandbox;
@@ -314,18 +320,52 @@ namespace rlbox
 	public:
 		TSandbox * const sandbox;
 		TFunc * const actualCallback;
-		sandbox_callback_state(TSandbox* sandbox, TFunc* actualCallback)
+		sandbox_callback_state(TSandbox* p_sandbox, TFunc* p_actualCallback) : sandbox(p_sandbox), actualCallback(p_actualCallback)
 		{
-			this->sandbox = sandbox;
-			this->actualCallback = actualCallback;
 		}
 	};
 
-	template <typename TRet, typename... TArgs, typename TSandbox>
+	template<typename T, typename TSandbox>
+	class tainted;
+
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template <typename T, typename TSandbox>
+	inline my_enable_if_t<my_is_array_v<T>,
+	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, my_array_element_t<T>* retRaw)
+	{
+		//arrays are returned by pointer but tainted<Foo[]> is returned by value, so copy happens automatically
+		auto retRawPtr = (tainted<T, TSandbox> *) retRaw;
+		return *retRawPtr;
+	}
+
+	template <typename T, typename TSandbox>
+	inline my_enable_if_t<my_is_fundamental_v<T>,
+	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, T retRaw)
+	{
+		//primitives are returned by value
+		auto retRawPtr = (tainted<T, TSandbox> *) &retRaw;
+		return *retRawPtr;
+	}
+
+	template <typename T, typename TSandbox>
+	inline my_enable_if_t<my_is_pointer_v<T>,
+	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, T retRaw)
+	{
+		//pointers are returned by value
+		auto retRawPtr = (tainted<T, TSandbox> *) &retRaw;
+		return *retRawPtr;
+	}
+
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template <typename TSandbox, typename TRet, typename... TArgs>
 	__attribute__ ((noinline)) TRet sandbox_callback_receiver(TArgs... params, void* state)
 	{
-		auto stateObj = (sandbox_callback_state<TRet(tainted<TArgs>...), TSandbox>*) state;
-		return stateObj->actualCallback(sandbox_convertToUnverified(params)...);
+		auto stateObj = (sandbox_callback_state<TRet(tainted<TArgs, TSandbox>...), TSandbox>*) state;
+		return stateObj->actualCallback(sandbox_convertToUnverified<TArgs>(stateObj->sandbox, params)...);
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -348,7 +388,7 @@ namespace rlbox
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template<typename T, typename TSandbox>
-	class tainted_base : public sandbox_wrapper_base
+	class tainted_base : public sandbox_wrapper_base, public sandbox_wrapper_base_of<T>
 	{
 	};
 
@@ -407,6 +447,12 @@ namespace rlbox
 			return field;
 		}
 
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		inline my_decay_t<T2> UNSAFE_Unverified() const noexcept
+		{
+			return field;
+		}
+
 		//Even though this function is not enabled for array types, the C++ compiler complains that this is a a function that
 		//	accepts a "function type" param that returns an array type. So we decay the type for array types
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
@@ -419,6 +465,25 @@ namespace rlbox
 		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			return verifyFunction(field) == RLBox_Verify_Status::SAFE? field : defaultValue;
+		}
+
+		inline T copyAndVerifyArray(std::function<RLBox_Verify_Status(T)> verifyFunction, unsigned int elementCount, T defaultValue) const
+		{
+			// typedef my_remove_pointer_t<T> nonPointerType;
+			// typedef my_remove_const_t<nonPointerType> nonPointerConstType;
+
+			// T maskedFieldPtr = getMasked();
+			// uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(std::remove_pointer<T>) * elementCount;
+
+			// //check for overflow
+			// if((arrayEnd & 0xFFFFFFFF00000000) != (((uintptr_t)maskedFieldPtr) & 0xFFFFFFFF00000000))
+			// {
+			// 	return defaultValue;
+			// }
+
+			// nonPointerConstType* copy = new nonPointerConstType[elementCount];
+			// memcpy(copy, maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			// return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
@@ -483,31 +548,31 @@ namespace rlbox
 		tainted_volatile(const tainted_volatile<T, TSandbox>& p) = default;
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
-		inline T getAppSwizzledValue(T arg) const
+		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg) const
 		{
 			return arg;
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline T getAppSwizzledValue(T arg) const
+		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg) const
 		{
 			return (T) TSandbox::impl_GetUnsandboxedPointer(arg);
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
-		inline T getSandboxSwizzledValue(T arg) const
+		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg) const
 		{
 			return arg;
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline T getSandboxSwizzledValue(T arg) const
+		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg) const
 		{
 			return (T) TSandbox::impl_GetSandboxedPointer(arg);
 		}
 	public:
 
-		inline T UNSAFE_Unverified() const noexcept
+		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
 			return getAppSwizzledValue(field);
 		}
@@ -550,26 +615,6 @@ namespace rlbox
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	template <typename T, typename TSandbox>
-	inline my_enable_if_t<my_is_array_v<T>,
-	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, my_array_element_t<T>* retRaw)
-	{
-		//arrays are returned by pointer but tainted<Foo[]> is returned by value, so copy happens automatically
-		auto retRawPtr = (tainted<T, TSandbox> *) retRaw;
-		return *retRawPtr;
-	}
-
-	template <typename T, typename TSandbox>
-	inline my_enable_if_t<my_is_fundamental_v<T>,
-	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, T retRaw)
-	{
-		//primitives are returned by value
-		auto retRawPtr = (tainted<T, TSandbox> *) &retRaw;
-		return *retRawPtr;
-	}
-
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 	template <typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
 	inline T sandbox_removeWrapper(T& arg)
 	{
@@ -582,8 +627,20 @@ namespace rlbox
 		return arg.UNSAFE_Unverified();
 	}
 
+	template<class TData> 
+	class tainted_unwrapper {
+	public:
+		TData value_field;
+	};
+
+	template<typename T>
+	tainted_unwrapper<T> sandbox_removeWrapper_t_helper(sandbox_wrapper_base_of<T>);
+
+	template<typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
+	tainted_unwrapper<T> sandbox_removeWrapper_t_helper(T);
+
 	template <typename T>
-	using sandbox_removeWrapper_t = decltype(sandbox_removeWrapper(std::declval<my_add_lvalue_reference_t<T>>()));
+	using sandbox_removeWrapper_t = decltype(sandbox_removeWrapper_t_helper(std::declval<T>()).value_field);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -719,13 +776,16 @@ namespace rlbox
 			return heaparr(str, strlen(str) + 1);
 		}
 
-		template <typename TRet, typename... TArgs, ENABLE_IF(sandbox_callback_all_args_are_tainted<TSandbox, TRet(*)(TArgs...)>::value && my_is_function_v<T>)>
+		template <typename TRet, typename... TArgs, ENABLE_IF(sandbox_callback_all_args_are_tainted<TSandbox, TRet(*)(TArgs...)>::value)>
 		__attribute__ ((noinline))
-		sandbox_callback_helper<T, TSandbox> createCallback(TRet(*fnPtr)(TArgs...))
+		sandbox_callback_helper<TRet(sandbox_removeWrapper_t<TArgs>...), TSandbox> createCallback(TRet(*fnPtr)(TArgs...))
 		{
-			auto stateObject = new sandbox_callback_state<T, TSandbox>(this, fnPtr);
-			auto callbackRegisteredAddress = this->impl_RegisterCallback(sandbox_callback_receiver<TRet, TArgs..., TSandbox>, (void*)stateObject);
-			return sandbox_callback_helper<T, TSandbox>(this, callbackRegisteredAddress);
+			auto stateObject = new sandbox_callback_state<TRet(TArgs...), TSandbox>(this, fnPtr);
+			void* callbackReciever = (void*)(uintptr_t) sandbox_callback_receiver<TSandbox, TRet, sandbox_removeWrapper_t<TArgs>...>;
+			auto callbackRegisteredAddress = this->template impl_RegisterCallback<TRet, sandbox_removeWrapper_t<TArgs>...>(callbackReciever, (void*)stateObject);
+			using fnType = TRet(sandbox_removeWrapper_t<TArgs>...);
+			auto ret = sandbox_callback_helper<fnType, TSandbox>(this, (fnType*)(uintptr_t)callbackRegisteredAddress);
+			return ret;
 		}
 
 	};
