@@ -234,16 +234,19 @@ void testStackAndHeapArrAndStringParams()
 int exampleCallback(tainted<unsigned, DynLibNoSandbox> a, tainted<const char*, DynLibNoSandbox> b, tainted<unsigned[1], DynLibNoSandbox> c)
 {
 	auto aCopy = a.copyAndVerify([](unsigned val){ return val > 0 && val < 100? val : -1; });
-	auto bCopy = b.copyAndVerifyString([](const char* val) { return strlen(val) < 100; }, nullptr);
-	// unsigned cCopy[1];
-	// c.copyAndVerify(cCopy, sizeof(cCopy), [](unsigned* arr, size_t arrSize){ UNUSED(arrSize); unsigned val = *arr; return val > 0 && val < 100; });
-	// if(cCopy[0] + 1 != aCopy)
-	// {
-	// 	printf("Unexpected callback value: %d, %d\n", cCopy[0] + 1, aCopy);
-	// 	exit(1);
-	// }
-	// return aCopy + strlen(bCopy);
-	return 0;
+	auto bCopy = b.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+	unsigned cCopy[1];
+	c.copyAndVerify(cCopy, sizeof(cCopy), [](unsigned arr[1], size_t arrSize){ 
+		UNUSED(arrSize); 
+		unsigned val = *arr; 
+		return val > 0 && val < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE;
+	});
+	if(cCopy[0] + 1 != aCopy)
+	{
+		printf("Unexpected callback value: %d, %d\n", cCopy[0] + 1, aCopy);
+		exit(1);
+	}
+	return aCopy + strlen(bCopy);
 }
 
 void testCallback()

@@ -94,7 +94,10 @@ namespace rlbox
 	using my_array_element_t = my_remove_reference_t<decltype(*(std::declval<T>()))>;
 
 	template<typename T>
-	using my_decay_if_array_t = my_conditional_t<my_is_array_v<T>, my_decay_t<T>, T>;
+	using my_decay_noconst_if_array_t = my_conditional_t<my_is_array_v<T>, my_decay_t<T>, T>;
+
+	template<typename T>
+	using my_decay_if_array_t = my_conditional_t<my_is_array_v<T>, const my_remove_pointer_t<my_decay_t<T>> *, T>;
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -154,6 +157,9 @@ namespace rlbox
 	using return_argument = decltype(return_argument_helper(std::declval<T>()));
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<typename TSandbox>
+	class RLBoxSandbox;
 
 	class sandbox_wrapper_base {};
 
@@ -441,14 +447,7 @@ namespace rlbox
 		template<typename Arg, typename... Args, ENABLE_IF(!my_is_base_of_v<tainted_base<T, TSandbox>, my_remove_reference_t<Arg>> && my_is_fundamental_v<T>)>
 		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) { }
 
-		template<typename T2=T, ENABLE_IF(!my_is_array_v<T2>)>
-		inline T2 UNSAFE_Unverified() const noexcept
-		{
-			return field;
-		}
-
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
-		inline my_decay_t<T2> UNSAFE_Unverified() const noexcept
+		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
 			return field;
 		}
@@ -467,23 +466,56 @@ namespace rlbox
 			return verifyFunction(field) == RLBox_Verify_Status::SAFE? field : defaultValue;
 		}
 
-		inline T copyAndVerifyArray(std::function<RLBox_Verify_Status(T)> verifyFunction, unsigned int elementCount, T defaultValue) const
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		inline bool copyAndVerify(my_decay_noconst_if_array_t<T2> copy, size_t sizeOfCopy, std::function<RLBox_Verify_Status(T, size_t)> verifyFunction) const
 		{
-			// typedef my_remove_pointer_t<T> nonPointerType;
-			// typedef my_remove_const_t<nonPointerType> nonPointerConstType;
+			auto maskedFieldPtr = UNSAFE_Unverified();
 
-			// T maskedFieldPtr = getMasked();
-			// uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(std::remove_pointer<T>) * elementCount;
+			if(sizeOfCopy >= sizeof(T))
+			{
+				memcpy(copy, maskedFieldPtr, sizeof(T));
+				if(verifyFunction(copy, sizeof(T)) == RLBox_Verify_Status::SAFE)
+				{
+					return true;
+				}
+			}
 
-			// //check for overflow
-			// if((arrayEnd & 0xFFFFFFFF00000000) != (((uintptr_t)maskedFieldPtr) & 0xFFFFFFFF00000000))
-			// {
-			// 	return defaultValue;
-			// }
+			//something went wrong, clear the target for safety
+			memset(copy, 0, sizeof(T));
+			return false;
+		}
 
-			// nonPointerConstType* copy = new nonPointerConstType[elementCount];
-			// memcpy(copy, maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
-			// return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
+		inline my_decay_if_array_t<T> copyAndVerifyArray(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, unsigned int elementCount, T defaultValue) const
+		{
+			typedef my_remove_pointer_t<T> nonPointerType;
+			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
+
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(nonPointerType) * elementCount;
+
+			//check for overflow
+			if(!sandbox->isPointerInSandboxMemory((void*)arrayEnd))
+			{
+				return defaultValue;
+			}
+
+			nonPointerConstType* copy = new nonPointerConstType[elementCount];
+			memcpy(copy, maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
+		}
+
+		inline my_decay_if_array_t<T> copyAndVerifyString(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			auto elementCount = strlen(maskedFieldPtr) + 1;
+			auto ret = copyAndVerifyArray(sandbox, verifyFunction, elementCount, defaultValue);
+			if(ret != defaultValue)
+			{
+				my_remove_const_t<my_remove_pointer_t<T>>* retNoConstAlias = (my_remove_const_t<my_remove_pointer_t<T>>*)ret;
+				//ensure we have a trailing null on returned strings
+				retNoConstAlias[elementCount] = '\0';
+			}
+			return ret;
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
@@ -678,6 +710,11 @@ namespace rlbox
 			tainted<T*, TSandbox> ret;
 			ret.field = (T*) rangeCheckedAddr;
 			return ret;
+		}
+
+		bool isPointerInSandboxMemory(void* ptr)
+		{
+			return this->impl_KeepAddressInSandboxedRange(ptr) == ptr;
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
