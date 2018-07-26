@@ -49,6 +49,12 @@ char* simpleEchoTest(char * str)
 	return str;
 }
 
+float simpleFloatAddTest(const float a, const float b)
+{
+	printf("simpleFloatAddTest\n");
+	return a + b;
+}
+
 double simpleDoubleAddTest(const double a, const double b)
 {
 	printf("simpleDoubleAddTest\n");

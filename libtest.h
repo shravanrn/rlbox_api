@@ -18,6 +18,7 @@ extern "C" {
     int simpleCallbackTest(unsigned a, const char* b, CallbackType callback);
     int simpleWriteToFileTest(FILE* file, const char* str);
     char* simpleEchoTest(char * str);
+    float simpleFloatAddTest(const float a, const float b);
     double simpleDoubleAddTest(const double a, const double b);
     unsigned long simpleLongAddTest(unsigned long a, unsigned long b);
     struct testStruct simpleTestStructVal();

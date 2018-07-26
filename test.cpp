@@ -289,12 +289,21 @@ void testEchoAndPointerLocations()
 
 	ENSURE(retStr != nullptr && sandbox->isPointerInAppMemoryOrNull(retStr));
 
-	printf("RetStr: %s\n", retStr);
-
 	auto isStringSame = strcmp(str, retStr) == 0;
 	ENSURE(isStringSame);
 
 	sandbox->freeInSandbox(strInSandbox);
+}
+
+void testFloatingPoint()
+{
+	auto resultF = sandbox_invoke(sandbox, simpleFloatAddTest, 1.0, 2.0)
+		.copyAndVerify([](double val){ return val > 0 && val < 100? val : -1.0; });
+	ENSURE(resultF == 3.0);
+
+	auto resultD = sandbox_invoke(sandbox, simpleDoubleAddTest, 1.0, 2.0)
+		.copyAndVerify([](double val){ return val > 0 && val < 100? val : -1.0; });
+	ENSURE(resultD == 3.0);
 }
 
 int main(int argc, char const *argv[])
@@ -312,5 +321,6 @@ int main(int argc, char const *argv[])
 	testStackAndHeapArrAndStringParams();
 	testCallback();
 	testEchoAndPointerLocations();
+	testFloatingPoint();
 	return 0;
 }
