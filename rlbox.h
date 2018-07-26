@@ -494,7 +494,7 @@ namespace rlbox
 			uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(nonPointerType) * elementCount;
 
 			//check for overflow
-			if(!sandbox->isPointerInSandboxMemory((void*)arrayEnd))
+			if(!sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
 			{
 				return defaultValue;
 			}
@@ -712,9 +712,26 @@ namespace rlbox
 			return ret;
 		}
 
-		bool isPointerInSandboxMemory(void* ptr)
+		template<typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
+		void freeInSandbox(T* val)
 		{
-			return this->impl_KeepAddressInSandboxedRange(ptr) == ptr;
+			return this->impl_freeInSandbox(val);
+		}
+
+		template <typename T, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, T>)>
+		void freeInSandbox(T val)
+		{
+			return this->impl_freeInSandbox(val->UNSAFE_Unverified());
+		}		
+
+		bool isPointerInSandboxMemoryOrNull(const void* p)
+		{
+			return this->impl_isPointerInSandboxMemoryOrNull(p);
+		}
+
+		bool isPointerInAppMemoryOrNull(const void* p)
+		{
+			return this->impl_isPointerInAppMemoryOrNull(p);
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>

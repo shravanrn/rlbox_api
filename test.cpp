@@ -77,6 +77,16 @@ public:
 		return p;
 	}
 
+	bool impl_isPointerInSandboxMemoryOrNull(const void* p)
+	{
+		return true;
+	}
+
+	bool impl_isPointerInAppMemoryOrNull(const void* p)
+	{
+		return true;
+	}
+
 	template<typename TRet, typename... TArgs> 
 	static TRet impl_CallbackReceiver0(TArgs... params)
 	{
@@ -259,6 +269,34 @@ void testCallback()
 	ENSURE(result == 10);
 }
 
+void testEchoAndPointerLocations()
+{
+	const char* str = "Hello";
+
+	//str is allocated in our heap, not the sandbox's heap
+	ENSURE(sandbox->isPointerInAppMemoryOrNull(str));
+
+	tainted<char*, DynLibNoSandbox> temp = sandbox->mallocInSandbox<char>(strlen(str) + 1);
+	char* strInSandbox = temp.UNSAFE_Unverified();
+	ENSURE(sandbox->isPointerInSandboxMemoryOrNull(strInSandbox));
+
+	strcpy(strInSandbox, str);
+
+	auto retStrRaw = sandbox_invoke(sandbox, simpleEchoTest, strInSandbox);
+	*retStrRaw = 'g';
+	*retStrRaw = 'H';
+	char* retStr = retStrRaw.copyAndVerifyString(sandbox, [](char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+
+	ENSURE(retStr != nullptr && sandbox->isPointerInAppMemoryOrNull(retStr));
+
+	printf("RetStr: %s\n", retStr);
+
+	auto isStringSame = strcmp(str, retStr) == 0;
+	ENSURE(isStringSame);
+
+	sandbox->freeInSandbox(strInSandbox);
+}
+
 int main(int argc, char const *argv[])
 {
 	sandbox = RLBoxSandbox<DynLibNoSandbox>::createSandbox("", "./libtest.so");
@@ -273,5 +311,6 @@ int main(int argc, char const *argv[])
 	testTwoVerificationFunctionFormats();
 	testStackAndHeapArrAndStringParams();
 	testCallback();
+	testEchoAndPointerLocations();
 	return 0;
 }
