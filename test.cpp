@@ -144,13 +144,42 @@ public:
 	}
 };
 
+//////////////////////////////////////////////////////////////////
+
+#define sandbox_fields_reflection_exampleId_class_testStruct(f, g, ...) \
+	f(unsigned long, fieldLong, ##__VA_ARGS__) \
+	g() \
+	f(const char*, fieldString, ##__VA_ARGS__) \
+	g() \
+	f(unsigned int, fieldBool, ##__VA_ARGS__) \
+	g() \
+	f(char[8], fieldFixedArr, ##__VA_ARGS__) \
+	g() \
+	f(int (*)(unsigned, const char*, unsigned[1]), fieldFnPtr, ##__VA_ARGS__) \
+	g()
+
+#define sandbox_fields_reflection_exampleId_allClasses(f, ...) \
+	f(testStruct, exampleId, ##__VA_ARGS__)
+
+rlbox_load_library_api(exampleId, DynLibNoSandbox)
+
+//////////////////////////////////////////////////////////////////
+
 RLBoxSandbox<DynLibNoSandbox>* sandbox;
 
 void testSizes()
 {
-	ENSURE(sizeof(tainted<int, DynLibNoSandbox>) == sizeof(int));
+	ENSURE(sizeof(tainted<long, DynLibNoSandbox>) == sizeof(long));
 	ENSURE(sizeof(tainted<int*, DynLibNoSandbox>) == sizeof(int*));
+	ENSURE(sizeof(tainted<testStruct, DynLibNoSandbox>) == sizeof(testStruct));
+	ENSURE(sizeof(tainted<testStruct*, DynLibNoSandbox>) == sizeof(testStruct*));
+
+	ENSURE(sizeof(tainted_volatile<long, DynLibNoSandbox>) == sizeof(long));
+	ENSURE(sizeof(tainted_volatile<int*, DynLibNoSandbox>) == sizeof(int*));
+	ENSURE(sizeof(tainted_volatile<testStruct, DynLibNoSandbox>) == sizeof(testStruct));
+	ENSURE(sizeof(tainted_volatile<testStruct*, DynLibNoSandbox>) == sizeof(testStruct*));
 }
+
 void testAssignment()
 {
 	tainted<int, DynLibNoSandbox> a;
@@ -185,6 +214,18 @@ void testDerefOperators()
 	deref2 = *pa;
 	UNUSED(deref);
 	UNUSED(deref2);
+}
+
+void testPointerAssignments()
+{
+	tainted<int**, DynLibNoSandbox> pa = nullptr;
+	pa = nullptr;
+	tainted<int**, DynLibNoSandbox> pb = 0;
+	pb = 0;
+
+	tainted<int***, DynLibNoSandbox> pc = sandbox->mallocInSandbox<int**>();
+	*pc = 0;
+	pb = *pc;
 }
 
 void testVolatileDerefOperator()
@@ -228,6 +269,16 @@ void testTwoVerificationFunctionFormats()
 	auto result2 = sandbox_invoke(sandbox, simpleAddTest, 2, 3)
 		.copyAndVerify([](int val){ return val > 0 && val < 10? val : -1;});
 	ENSURE(result2 == 5);
+}
+
+void testPointerVerificationFunctionFormats()
+{
+	tainted<int*, DynLibNoSandbox> pa = sandbox->mallocInSandbox<int>();
+	*pa = 4;
+
+	auto result1 = sandbox_invoke(sandbox, echoPointer, pa)
+		.copyAndVerify([](int val){ return val > 0 && val < 10? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE;}, -1);
+	ENSURE(result1 == 4);
 }
 
 void testStackAndHeapArrAndStringParams()
@@ -306,6 +357,58 @@ void testFloatingPoint()
 	ENSURE(resultD == 3.0);
 }
 
+void testStructures()
+{
+	auto resultT = sandbox_invoke(sandbox, simpleTestStructVal);
+	auto result = resultT
+		.copyAndVerify([](tainted<testStruct, DynLibNoSandbox>& val){ 
+			testStruct ret;
+			ret.fieldLong = val.fieldLong.copyAndVerify([](unsigned long val) { return val; });
+			ret.fieldString = val.fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+			ret.fieldBool = val.fieldBool.copyAndVerify([](unsigned int val) { return val; });
+			val.fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
+			return ret; 
+		});
+	ENSURE(result.fieldLong == 7 && 
+		strcmp(result.fieldString, "Hello") == 0 &&
+		result.fieldBool == 1 &&
+		strcmp(result.fieldFixedArr, "Bye") == 0);
+
+	//writes should still go through
+	resultT.fieldLong = 17;
+	long val = resultT.fieldLong.copyAndVerify([](unsigned long val) { return val; });
+	ENSURE(val == 17);
+}
+
+void testStructurePointers()
+{
+	auto resultT = sandbox_invoke(sandbox, simpleTestStructPtr);
+	auto result = resultT
+		.copyAndVerify([](tainted<testStruct, DynLibNoSandbox>* val) { 
+			testStruct ret;
+			ret.fieldLong = val->fieldLong.copyAndVerify([](unsigned long val) { return val; });
+			ret.fieldString = val->fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+			ret.fieldBool = val->fieldBool.copyAndVerify([](unsigned int val) { return val; });
+			val->fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
+			return ret; 
+		});
+	ENSURE(result.fieldLong == 7 && 
+		strcmp(result.fieldString, "Hello") == 0 &&
+		result.fieldBool == 1 &&
+		strcmp(result.fieldFixedArr, "Bye") == 0);
+
+	//writes should still go through
+	resultT->fieldLong = 17;
+	long val2 = resultT->fieldLong.copyAndVerify([](unsigned long val) { return val; });
+	ENSURE(val2 == 17);
+
+	//writes of callback functions should check parameters
+	// resultT->fieldFnPtr = testParams->registeredCallback.get();
+	// //test & and * operators
+	unsigned long val3 = (*&resultT->fieldLong).copyAndVerify([](unsigned long val) { return val; });
+	ENSURE(val3 == 17);
+}
+
 int main(int argc, char const *argv[])
 {
 	sandbox = RLBoxSandbox<DynLibNoSandbox>::createSandbox("", "./libtest.so");
@@ -313,14 +416,18 @@ int main(int argc, char const *argv[])
 	testAssignment();
 	testBinaryOperators();
 	testDerefOperators();
+	testPointerAssignments();
 	testVolatileDerefOperator();
 	testAddressOfOperators();
 	testAppPointer();
 	testFunctionInvocation();
 	testTwoVerificationFunctionFormats();
+	testPointerVerificationFunctionFormats();
 	testStackAndHeapArrAndStringParams();
 	testCallback();
 	testEchoAndPointerLocations();
 	testFloatingPoint();
+	testStructures();
+	testStructurePointers();
 	return 0;
 }

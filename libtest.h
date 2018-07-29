@@ -23,5 +23,7 @@ extern "C" {
     unsigned long simpleLongAddTest(unsigned long a, unsigned long b);
     struct testStruct simpleTestStructVal();
     struct testStruct* simpleTestStructPtr();
+    struct testStruct simpleTestStructValBadPtr();
+    struct testStruct* simpleTestStructPtrBadPtr();
     int* echoPointer(int* pointer);
 }

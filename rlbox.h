@@ -12,6 +12,8 @@
 #include <type_traits>
 #include <map>
 #include <string.h>
+#include <cstdint>
+#include <limits>
 
 namespace rlbox
 {
@@ -88,7 +90,7 @@ namespace rlbox
 	#define ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
 
 	template<typename T>
-	constexpr bool my_is_one_level_ptr_v = my_is_pointer_v<my_remove_pointer_t<T>>;
+	constexpr bool my_is_one_level_ptr_v = my_is_pointer_v<T> && !my_is_pointer_v<my_remove_pointer_t<T>>;
 
 	template<typename T>
 	using my_array_element_t = my_remove_reference_t<decltype(*(std::declval<T>()))>;
@@ -98,6 +100,12 @@ namespace rlbox
 
 	template<typename T>
 	using my_decay_if_array_t = my_conditional_t<my_is_array_v<T>, const my_remove_pointer_t<my_decay_t<T>> *, T>;
+
+	template<typename T>
+	using valid_return_t = my_decay_noconst_if_array_t<T>;
+
+	template<typename T>
+	using my_remove_pointer_or_valid_return_t = my_conditional_t<my_is_function_v<my_remove_pointer_t<T>> || my_is_array_v<T>, my_decay_if_array_t<T>, my_remove_pointer_t<T>>;
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -160,6 +168,14 @@ namespace rlbox
 
 	template<typename TSandbox>
 	class RLBoxSandbox;
+
+	template<typename T, typename TSandbox>
+	class tainted;
+
+	template<typename T, typename TSandbox>
+	class tainted_volatile;
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class sandbox_wrapper_base {};
 
@@ -331,20 +347,7 @@ namespace rlbox
 		}
 	};
 
-	template<typename T, typename TSandbox>
-	class tainted;
-
-
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template <typename T, typename TSandbox>
-	inline my_enable_if_t<my_is_array_v<T>,
-	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, my_array_element_t<T>* retRaw)
-	{
-		//arrays are returned by pointer but tainted<Foo[]> is returned by value, so copy happens automatically
-		auto retRawPtr = (tainted<T, TSandbox> *) retRaw;
-		return *retRawPtr;
-	}
 
 	template <typename T, typename TSandbox>
 	inline my_enable_if_t<my_is_fundamental_v<T>,
@@ -361,6 +364,28 @@ namespace rlbox
 	{
 		//pointers are returned by value
 		auto retRawPtr = (tainted<T, TSandbox> *) &retRaw;
+		return *retRawPtr;
+	}
+
+	template <typename T, typename TSandbox>
+	inline my_enable_if_t<my_is_array_v<T>,
+	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, my_array_element_t<T>* retRaw)
+	{
+		//arrays are normally returned by decaying into a pointer, and returning the pointer
+		//but tainted<Foo[]> is returned by value, so copy happens automatically on return - so no additional copying needed
+		auto retRawPtr = (tainted<T, TSandbox> *) retRaw;
+		return *retRawPtr;
+	}
+
+	template <typename T, typename TSandbox>
+	inline my_enable_if_t<my_is_class_v<T>,
+	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, T retRaw)
+	{
+		//Structs may have fields which are pointers, each of these have to unswizzled
+		//This is performed in the automatic conversion from tainted_volatile to tainted in the return statement
+		T structCopy;
+		memcpy(&structCopy, &retRaw, sizeof(T));
+		auto retRawPtr = (tainted_volatile<T, TSandbox> *) &structCopy;
 		return *retRawPtr;
 	}
 
@@ -399,9 +424,6 @@ namespace rlbox
 	};
 
 	template<typename T, typename TSandbox>
-	class tainted_volatile;
-
-	template<typename T, typename TSandbox>
 	class tainted : public tainted_base<T, TSandbox>
 	{
 		//make sure tainted<T1> can access private members of tainted<T2>
@@ -435,10 +457,22 @@ namespace rlbox
 		tainted() = default;
 		tainted(const tainted<T, TSandbox>& p) = default;
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
+		template<typename T2=T, ENABLE_IF(!my_is_array_v<T2>)>
 		tainted(const tainted_volatile<T, TSandbox>& p)
 		{
-			field = p.field;
+			field = p.UNSAFE_Unverified();
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		tainted(const tainted_volatile<T, TSandbox>& p)
+		{
+			memcpy(field, (void*) p.field, sizeof(T));
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		tainted(const std::nullptr_t& arg)
+		{
+			field = arg;
 		}
 
 		//we explicitly disable this constructor if it has one of the signatures above, 
@@ -452,18 +486,47 @@ namespace rlbox
 			return field;
 		}
 
-		//Even though this function is not enabled for array types, the C++ compiler complains that this is a a function that
-		//	accepts a "function type" param that returns an array type. So we decay the type for array types
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
-		inline T2 copyAndVerify(std::function<my_conditional_t<my_is_array_v<T>, my_decay_t<T>, T>(T)> verifyFunction) const
+		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
-			return verifyFunction(field);
+			return verifyFunction(UNSAFE_Unverified());
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
 		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
-			return verifyFunction(field) == RLBox_Verify_Status::SAFE? field : defaultValue;
+			return verifyFunction(UNSAFE_Unverified()) == RLBox_Verify_Status::SAFE? field : defaultValue;
+		}
+
+		//Non class pointers - one level pointers
+		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
+		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<RLBox_Verify_Status(my_remove_pointer_t<T>)> verifyFunction, my_remove_pointer_t<T> defaultValue) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			if(maskedFieldPtr == nullptr)
+			{
+				return defaultValue;
+			}
+
+			my_remove_pointer_t<T> maskedField = *maskedFieldPtr;
+			return verifyFunction(maskedField) == RLBox_Verify_Status::SAFE? maskedField : defaultValue;
+		}
+
+		//Class pointers - one level pointers
+
+		//Even though this function is not enabled for function types, the C++ compiler complains that this is a function that
+		//	returns a function type
+		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && my_is_class_v<my_remove_pointer_t<T2>>)>
+		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<my_remove_pointer_or_valid_return_t<T>(tainted<my_remove_pointer_t<T>, TSandbox>*)> verifyFunction) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			if(maskedFieldPtr == nullptr)
+			{
+				return verifyFunction(nullptr);
+			}
+
+			tainted<my_remove_pointer_t<T>, TSandbox> maskedField = *((tainted_volatile<my_remove_pointer_t<T>, TSandbox>*)maskedFieldPtr);
+			return verifyFunction(&maskedField);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
@@ -508,6 +571,11 @@ namespace rlbox
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto elementCount = strlen(maskedFieldPtr) + 1;
+			if(elementCount >= std::numeric_limits<std::uint32_t>::max())
+			{
+				return defaultValue;
+			}
+
 			auto ret = copyAndVerifyArray(sandbox, verifyFunction, elementCount, defaultValue);
 			if(ret != defaultValue)
 			{
@@ -525,19 +593,32 @@ namespace rlbox
 			return *this;
 		}
 
-		//we don't support app pointers in structs that are maintained in application memory.
-
-		inline tainted<T, TSandbox> operator-() const noexcept
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted<T, TSandbox>& operator=(const std::nullptr_t& arg) noexcept
 		{
-			tainted<T, TSandbox> result = -field;
-			return result;
+			field = arg;
+			return *this;
 		}
+
+		//we don't support app pointers in structs that are maintained in application memory.
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
 		{
 			auto& ret = *((tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) field);
 			return ret;
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>* operator->()
+		{
+			return (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) UNSAFE_Unverified();
+		}
+
+		inline tainted<T, TSandbox> operator-() const noexcept
+		{
+			tainted<T, TSandbox> result = -field;
+			return result;
 		}
 
 		template<typename TRHS>
@@ -588,7 +669,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg) const
 		{
-			return (T) TSandbox::impl_GetUnsandboxedPointer(arg);
+			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg);
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
@@ -600,13 +681,113 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg) const
 		{
-			return (T) TSandbox::impl_GetSandboxedPointer(arg);
+			return (T) TSandbox::impl_GetSandboxedPointer((void*) arg);
 		}
 	public:
 
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
 			return getAppSwizzledValue(field);
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
+		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
+		{
+			return verifyFunction(UNSAFE_Unverified());
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
+		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
+		{
+			return verifyFunction(UNSAFE_Unverified()) == RLBox_Verify_Status::SAFE? field : defaultValue;
+		}
+
+		//Non class pointers - one level pointers
+		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
+		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<RLBox_Verify_Status(my_remove_pointer_t<T>)> verifyFunction, my_remove_pointer_t<T> defaultValue) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			if(maskedFieldPtr == nullptr)
+			{
+				return defaultValue;
+			}
+
+			my_remove_pointer_t<T> maskedField = *maskedFieldPtr;
+			return verifyFunction(maskedField) == RLBox_Verify_Status::SAFE? maskedField : defaultValue;
+		}
+
+		//Class pointers - one level pointers
+
+		//Even though this function is not enabled for function types, the C++ compiler complains that this is a function that
+		//	returns a function type
+		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && my_is_class_v<my_remove_pointer_t<T2>>)>
+		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<my_remove_pointer_or_valid_return_t<T>(tainted<my_remove_pointer_t<T>, TSandbox>*)> verifyFunction) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			if(maskedFieldPtr == nullptr)
+			{
+				return verifyFunction(nullptr);
+			}
+
+			tainted<my_remove_pointer_t<T>, TSandbox> maskedField = *((tainted_volatile<my_remove_pointer_t<T>, TSandbox>*)maskedFieldPtr);
+			return verifyFunction(&maskedField);
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		inline bool copyAndVerify(my_decay_noconst_if_array_t<T2> copy, size_t sizeOfCopy, std::function<RLBox_Verify_Status(T, size_t)> verifyFunction) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+
+			if(sizeOfCopy >= sizeof(T))
+			{
+				memcpy(copy, maskedFieldPtr, sizeof(T));
+				if(verifyFunction(copy, sizeof(T)) == RLBox_Verify_Status::SAFE)
+				{
+					return true;
+				}
+			}
+
+			//something went wrong, clear the target for safety
+			memset(copy, 0, sizeof(T));
+			return false;
+		}
+
+		inline my_decay_if_array_t<T> copyAndVerifyArray(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, unsigned int elementCount, T defaultValue) const
+		{
+			typedef my_remove_pointer_t<T> nonPointerType;
+			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
+
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(nonPointerType) * elementCount;
+
+			//check for overflow
+			if(!sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
+			{
+				return defaultValue;
+			}
+
+			nonPointerConstType* copy = new nonPointerConstType[elementCount];
+			memcpy(copy, maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
+		}
+
+		inline my_decay_if_array_t<T> copyAndVerifyString(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			auto elementCount = strlen(maskedFieldPtr) + 1;
+			if(elementCount >= std::numeric_limits<std::uint32_t>::max())
+			{
+				return defaultValue;
+			}
+
+			auto ret = copyAndVerifyArray(sandbox, verifyFunction, elementCount, defaultValue);
+			if(ret != defaultValue)
+			{
+				my_remove_const_t<my_remove_pointer_t<T>>* retNoConstAlias = (my_remove_const_t<my_remove_pointer_t<T>>*)ret;
+				//ensure we have a trailing null on returned strings
+				retNoConstAlias[elementCount] = '\0';
+			}
+			return ret;
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
@@ -630,6 +811,13 @@ namespace rlbox
 			return *this;
 		}
 
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted_volatile<T, TSandbox>& operator=(const std::nullptr_t& arg) noexcept
+		{
+			field = arg;
+			return *this;
+		}
+
 		inline tainted<T*, TSandbox> operator&() const noexcept
 		{
 			tainted<T*, TSandbox> ret;
@@ -643,7 +831,109 @@ namespace rlbox
 			auto ret = (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) getAppSwizzledValue(field);
 			return *ret;
 		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>* operator->()
+		{
+			return (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) UNSAFE_Unverified();
+		}
+
+		inline operator tainted<T, TSandbox>() const 
+		{
+			tainted<T, TSandbox> fieldCopy(*this);
+			return fieldCopy;
+		}
+
+		inline tainted<T, TSandbox> operator-() const noexcept
+		{
+			tainted<T, TSandbox> result = -field;
+			return result;
+		}
+
+		template<typename TRHS>
+		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
+		{
+			tainted<T, TSandbox> result = field + unwrap(rhs);
+			return result;
+		}
+
+		template<typename TRHS>
+		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
+		{
+			tainted<T, TSandbox> result = field - unwrap(rhs);
+			return result;
+		}
+
+		template<typename TRHS>
+		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
+		{
+			tainted<T, TSandbox> result = field * unwrap(rhs);
+			return result;
+		}
 	};
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	#define helper_tainted_createField(fieldType, fieldName, TSandbox) tainted<fieldType, TSandbox> fieldName;
+	#define helper_tainted_volatile_createField(fieldType, fieldName, TSandbox) tainted_volatile<fieldType, TSandbox> fieldName;
+	#define helper_noOp()
+	#define helper_fieldInit(fieldType, fieldName, TSandbox) fieldName = p.fieldName;
+	#define helper_fieldAssign(fieldType, fieldName, TSandbox) ret.fieldName = fieldName;
+
+	#define tainted_data_specialization(T, libId, TSandbox) \
+	template<> \
+	class tainted_volatile<T, TSandbox> \
+	{ \
+	public: \
+		sandbox_fields_reflection_##libId##_class_##T(helper_tainted_volatile_createField, helper_noOp, TSandbox) \
+		\
+		/*inline T UNSAFE_Unverified() const noexcept */\
+		/*{ */\
+		/*	tainted<T, TSandbox> ret; */\
+		/*	sandbox_fields_reflection_##libId##_class_##T(helper_fieldAssign, helper_noOp, TSandbox) */\
+		/*	return ret.UNSAFE_Unverified(); */\
+		/*} */\
+		/**/\
+		/*inline operator tainted<T, TSandbox>() const */\
+		/*{ */\
+		/*	tainted<T, TSandbox> fieldCopy(*this); */\
+		/*	return fieldCopy; */\
+		/*} */\
+	};\
+	template<> \
+	class tainted<T, TSandbox> \
+	{ \
+	public: \
+		sandbox_fields_reflection_##libId##_class_##T(helper_tainted_createField, helper_noOp, TSandbox) \
+		\
+		tainted(const tainted_volatile<T, TSandbox>& p) \
+		{ \
+			sandbox_fields_reflection_##libId##_class_##T(helper_fieldInit, helper_noOp, TSandbox) \
+		} \
+ \
+		inline T UNSAFE_Unverified() const noexcept \
+		{ \
+			return *((T*)this); \
+		} \
+		 \
+		inline T copyAndVerify(std::function<T(tainted<T, TSandbox>&)> verifyFunction) \
+		{ \
+			return verifyFunction(*this); \
+		} \
+		\
+		/*template<typename TRHS> */\
+		/*inline my_enable_if_t<my_is_assignable_v<T&, TRHS>, */\
+		/*tainted_volatile<T, TSandbox>&> operator=(const tainted_volatile<TRHS, TSandbox>& arg) noexcept */\
+		/*{ */\
+		/*	sandbox_fields_reflection_##libId##_class_##T(sandbox_unverified_data_fieldAssign, sandbox_unverified_data_noOp, TSandbox) */\
+		/*	return *this; */\
+		/*} */\
+	\
+	};
+
+	#define rlbox_load_library_api(libId, TSandbox) namespace rlbox { \
+		sandbox_fields_reflection_##libId##_allClasses(tainted_data_specialization, TSandbox) \
+	}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -743,8 +1033,7 @@ namespace rlbox
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeStatic(T* fnPtr, TArgs&&... params)
 		{
-			return_argument<T> fnRet = fnPtr(sandbox_removeWrapper(params)...);
-			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
+			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnPtr(sandbox_removeWrapper(params)...));
 			return ret;
 		}
 
@@ -757,8 +1046,7 @@ namespace rlbox
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
-			return_argument<T> fnRet = this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(params)...);
-			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnRet);
+			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(params)...));
 			return ret;
 		}
 
