@@ -228,6 +228,18 @@ void testPointerAssignments()
 	pb = *pc;
 }
 
+void testPointerNullChecks()
+{
+	auto tempValPtr = sandbox->mallocInSandbox<int>();
+	*tempValPtr = 3;
+	auto resultT = sandbox_invoke(sandbox, echoPointer, tempValPtr);
+	//make sure null checks go through
+
+	ENSURE(resultT != nullptr);
+	auto result = resultT.copyAndVerify([](int* val) -> int { return *val; });
+	ENSURE(result == 3);
+}
+
 void testVolatileDerefOperator()
 {
 	tainted<int**, DynLibNoSandbox> ppa = sandbox->mallocInSandbox<int*>();
@@ -277,7 +289,7 @@ void testPointerVerificationFunctionFormats()
 	*pa = 4;
 
 	auto result1 = sandbox_invoke(sandbox, echoPointer, pa)
-		.copyAndVerify([](int val){ return val > 0 && val < 10? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE;}, -1);
+		.copyAndVerify([](int* val){ return *val > 0 && *val < 10? *val : -1;});
 	ENSURE(result1 == 4);
 }
 
@@ -318,6 +330,16 @@ void testCallback()
 	auto result = resultT
 		.copyAndVerify([](int val){ return val > 0 && val < 100? val : -1; });
 	ENSURE(result == 10);
+}
+
+void testCallbackOnStruct()
+{
+	tainted<testStruct, DynLibNoSandbox> foo;
+	auto registeredCallback = sandbox->createCallback(exampleCallback);
+	foo.fieldFnPtr = registeredCallback;
+
+	tainted<testStruct*, DynLibNoSandbox> pFoo = sandbox->mallocInSandbox<testStruct>();
+	pFoo->fieldFnPtr = registeredCallback;
 }
 
 void testEchoAndPointerLocations()
@@ -402,11 +424,20 @@ void testStructurePointers()
 	long val2 = resultT->fieldLong.copyAndVerify([](unsigned long val) { return val; });
 	ENSURE(val2 == 17);
 
-	//writes of callback functions should check parameters
-	// resultT->fieldFnPtr = testParams->registeredCallback.get();
-	// //test & and * operators
+	//test & and * operators
 	unsigned long val3 = (*&resultT->fieldLong).copyAndVerify([](unsigned long val) { return val; });
 	ENSURE(val3 == 17);
+}
+
+void testStatefulLambdas()
+{
+	int val2 = 42;
+	auto tempValPtr = sandbox->mallocInSandbox<int>();
+	*tempValPtr = 3;
+
+	//capture something to test stateful lambdas
+	int result = tempValPtr->copyAndVerify([&val2](int val) { return val + val2; });
+	ENSURE(result == 45);
 }
 
 int main(int argc, char const *argv[])
@@ -417,6 +448,7 @@ int main(int argc, char const *argv[])
 	testBinaryOperators();
 	testDerefOperators();
 	testPointerAssignments();
+	testPointerNullChecks();
 	testVolatileDerefOperator();
 	testAddressOfOperators();
 	testAppPointer();
@@ -425,9 +457,11 @@ int main(int argc, char const *argv[])
 	testPointerVerificationFunctionFormats();
 	testStackAndHeapArrAndStringParams();
 	testCallback();
+	testCallbackOnStruct();
 	testEchoAndPointerLocations();
 	testFloatingPoint();
 	testStructures();
 	testStructurePointers();
+	testStatefulLambdas();
 	return 0;
 }

@@ -107,6 +107,9 @@ namespace rlbox
 	template<typename T>
 	using my_remove_pointer_or_valid_return_t = my_conditional_t<my_is_function_v<my_remove_pointer_t<T>> || my_is_array_v<T>, my_decay_if_array_t<T>, my_remove_pointer_t<T>>;
 
+	template<typename T>
+	constexpr bool my_is_function_ptr_v = my_is_pointer_v<T> && my_is_function_v<my_remove_pointer_t<T>>;
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	//https://github.com/facebook/folly/blob/master/folly/functional/Invoke.h
@@ -500,16 +503,16 @@ namespace rlbox
 
 		//Non class pointers - one level pointers
 		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
-		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<RLBox_Verify_Status(my_remove_pointer_t<T>)> verifyFunction, my_remove_pointer_t<T> defaultValue) const
+		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<my_remove_pointer_or_valid_return_t<T>(T)> verifyFunction) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			if(maskedFieldPtr == nullptr)
 			{
-				return defaultValue;
+				return verifyFunction(nullptr);
 			}
 
 			my_remove_pointer_t<T> maskedField = *maskedFieldPtr;
-			return verifyFunction(maskedField) == RLBox_Verify_Status::SAFE? maskedField : defaultValue;
+			return verifyFunction(&maskedField);
 		}
 
 		//Class pointers - one level pointers
@@ -593,14 +596,22 @@ namespace rlbox
 			return *this;
 		}
 
+		//we don't support app pointers in structs that are maintained in application memory.
+		//so we dont provide operator=(const sandbox_app_ptr_wrapper<TRHS>& arg)
+
+		template<typename TRHS, ENABLE_IF(my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS*>)>
+		inline tainted<T, TSandbox>& operator=(const sandbox_callback_helper<TRHS, TSandbox>& arg) noexcept
+		{
+			field = arg.UNSAFE_Unverified();
+			return *this;
+		}
+
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox>& operator=(const std::nullptr_t& arg) noexcept
 		{
 			field = arg;
 			return *this;
 		}
-
-		//we don't support app pointers in structs that are maintained in application memory.
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
@@ -613,6 +624,18 @@ namespace rlbox
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>* operator->()
 		{
 			return (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) UNSAFE_Unverified();
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline bool operator==(const std::nullptr_t& arg) const
+		{
+			return field == arg;
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline bool operator!=(const std::nullptr_t& arg) const
+		{
+			return field != arg;
 		}
 
 		inline tainted<T, TSandbox> operator-() const noexcept
@@ -804,6 +827,13 @@ namespace rlbox
 			return *this;
 		}
 
+		template<typename TRHS, ENABLE_IF(my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS*>)>
+		inline tainted_volatile<T, TSandbox>& operator=(const sandbox_callback_helper<TRHS, TSandbox>& arg) noexcept
+		{
+			field = arg.UNSAFE_Unverified();
+			return *this;
+		}
+
 		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted<TRHS, TSandbox>& arg) noexcept
 		{
@@ -905,6 +935,8 @@ namespace rlbox
 	{ \
 	public: \
 		sandbox_fields_reflection_##libId##_class_##T(helper_tainted_createField, helper_noOp, TSandbox) \
+		tainted() = default; \
+		tainted(const tainted<T, TSandbox>& p) = default; \
 		\
 		tainted(const tainted_volatile<T, TSandbox>& p) \
 		{ \
