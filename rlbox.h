@@ -398,8 +398,8 @@ namespace rlbox
 	template <typename TSandbox, typename TRet, typename... TArgs>
 	__attribute__ ((noinline)) TRet sandbox_callback_receiver(TArgs... params, void* state)
 	{
-		auto stateObj = (sandbox_callback_state<TRet(tainted<TArgs, TSandbox>...), TSandbox>*) state;
-		return stateObj->actualCallback(sandbox_convertToUnverified<TArgs>(stateObj->sandbox, params)...);
+		auto stateObj = (sandbox_callback_state<TRet(TSandbox*, tainted<TArgs, TSandbox>...), TSandbox>*) state;
+		return stateObj->actualCallback(stateObj->sandbox, sandbox_convertToUnverified<TArgs>(stateObj->sandbox, params)...);
 	}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1152,9 +1152,9 @@ namespace rlbox
 
 		template <typename TRet, typename... TArgs, ENABLE_IF(sandbox_callback_all_args_are_tainted<TSandbox, TRet(*)(TArgs...)>::value)>
 		__attribute__ ((noinline))
-		sandbox_callback_helper<TRet(sandbox_removeWrapper_t<TArgs>...), TSandbox> createCallback(TRet(*fnPtr)(TArgs...))
+		sandbox_callback_helper<TRet(sandbox_removeWrapper_t<TArgs>...), TSandbox> createCallback(TRet(*fnPtr)(RLBoxSandbox<TSandbox>*, TArgs...))
 		{
-			auto stateObject = new sandbox_callback_state<TRet(TArgs...), TSandbox>(this, fnPtr);
+			auto stateObject = new sandbox_callback_state<TRet(RLBoxSandbox<TSandbox>*, TArgs...), TSandbox>(this, fnPtr);
 			void* callbackReciever = (void*)(uintptr_t) sandbox_callback_receiver<TSandbox, TRet, sandbox_removeWrapper_t<TArgs>...>;
 			auto callbackRegisteredAddress = this->template impl_RegisterCallback<TRet, sandbox_removeWrapper_t<TArgs>...>(callbackReciever, (void*)stateObject);
 			using fnType = TRet(sandbox_removeWrapper_t<TArgs>...);
