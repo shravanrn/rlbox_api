@@ -960,6 +960,12 @@ namespace rlbox
 			sandbox_fields_reflection_##libId##_class_##T(helper_fieldCopy, helper_noOp, TSandbox) \
 			return ret;\
 		} \
+		\
+		inline T copyAndVerify(std::function<T(tainted_volatile<T, TSandbox>&)> verifyFunction) \
+		{ \
+			return verifyFunction(*this); \
+		} \
+		\
 	};\
 	template<> \
 	class tainted<T, TSandbox> \
@@ -973,7 +979,7 @@ namespace rlbox
 		{ \
 			sandbox_fields_reflection_##libId##_class_##T(helper_fieldInit, helper_noOp, TSandbox) \
 		} \
- \
+ 		\
 		inline T UNSAFE_Unverified() const noexcept \
 		{ \
 			return *((T*)this); \
@@ -984,13 +990,19 @@ namespace rlbox
 			return verifyFunction(*this); \
 		} \
 		\
-		/*template<typename TRHS> */\
-		/*inline my_enable_if_t<my_is_assignable_v<T&, TRHS>, */\
-		/*tainted_volatile<T, TSandbox>&> operator=(const tainted_volatile<TRHS, TSandbox>& arg) noexcept */\
-		/*{ */\
-		/*	sandbox_fields_reflection_##libId##_class_##T(sandbox_unverified_data_fieldAssign, sandbox_unverified_data_noOp, TSandbox) */\
-		/*	return *this; */\
-		/*} */\
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)> \
+		inline tainted<T, TSandbox>& operator=(const TRHS& p) noexcept \
+		{ \
+			sandbox_fields_reflection_##libId##_class_##T(helper_fieldInit, helper_noOp, TSandbox) \
+			return *this; \
+		} \
+		\
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)> \
+		inline tainted<T, TSandbox>& operator=(const tainted_volatile<TRHS, TSandbox>& p) noexcept \
+		{ \
+			sandbox_fields_reflection_##libId##_class_##T(helper_fieldInit, helper_noOp, TSandbox) \
+			return *this; \
+		} \
 	};
 
 	#define rlbox_load_library_api(libId, TSandbox) namespace rlbox { \
@@ -1199,7 +1211,6 @@ namespace rlbox
 	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
 
 
-	#undef ENABLE_IF
 	#undef UNUSED
 }
 #endif
