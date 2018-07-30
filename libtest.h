@@ -10,6 +10,7 @@ extern "C" {
         unsigned int fieldBool; 
         char fieldFixedArr[8];
         int (*fieldFnPtr)(unsigned, const char*, unsigned[1]);
+        struct unknownClass* fieldUnknownPtr;
     };
 
     unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b);

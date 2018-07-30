@@ -8,6 +8,8 @@
 	f(char[8], fieldFixedArr, ##__VA_ARGS__) \
 	g() \
 	f(int (*)(unsigned, const char*, unsigned[1]), fieldFnPtr, ##__VA_ARGS__) \
+	g() \
+	f(struct unknownClass*, fieldUnknownPtr, ##__VA_ARGS__) \
 	g()
 
 #define sandbox_fields_reflection_testlib_allClasses(f, ...) \
