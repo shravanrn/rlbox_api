@@ -19,7 +19,7 @@ namespace rlbox
 {
 	//https://stackoverflow.com/questions/19532475/casting-a-variadic-parameter-pack-to-void
 	struct UNUSED_PACK_HELPER { template<typename ...Args> UNUSED_PACK_HELPER(Args const & ... ) {} };
-	#define UNUSED(x) rlbox_api_detail::UNUSED_PACK_HELPER {x}
+	#define UNUSED(x) rlbox::UNUSED_PACK_HELPER {x}
 
 	//C++11 doesn't have the _t and _v convenience helpers, so create these
 	//Note the _v variants uses one C++ 14 feature we use ONLY FOR convenience. This generates some warnings that can be ignored.
@@ -84,6 +84,9 @@ namespace rlbox
 	template< class T >
 	using my_decay_t = typename std::decay<T>::type;
 
+	template<typename T>
+	using my_remove_extent_t = typename std::remove_extent<T>::type;
+
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//Some additional helpers
 
@@ -91,9 +94,6 @@ namespace rlbox
 
 	template<typename T>
 	constexpr bool my_is_one_level_ptr_v = my_is_pointer_v<T> && !my_is_pointer_v<my_remove_pointer_t<T>>;
-
-	template<typename T>
-	using my_array_element_t = my_remove_reference_t<decltype(*(std::declval<T>()))>;
 
 	template<typename T>
 	using my_decay_noconst_if_array_t = my_conditional_t<my_is_array_v<T>, my_decay_t<T>, T>;
@@ -372,7 +372,7 @@ namespace rlbox
 
 	template <typename T, typename TSandbox>
 	inline my_enable_if_t<my_is_array_v<T>,
-	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, my_array_element_t<T>* retRaw)
+	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, my_remove_extent_t<T>* retRaw)
 	{
 		//arrays are normally returned by decaying into a pointer, and returning the pointer
 		//but tainted<Foo[]> is returned by value, so copy happens automatically on return - so no additional copying needed
@@ -466,10 +466,19 @@ namespace rlbox
 			field = p.UNSAFE_Unverified();
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && !my_is_pointer_v<my_remove_extent_t<T2>>)>
 		tainted(const tainted_volatile<T, TSandbox>& p)
 		{
 			memcpy(field, (void*) p.field, sizeof(T));
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>)>
+		tainted(const tainted_volatile<T, TSandbox>& p)
+		{
+			for(unsigned long i = 0; i < sizeof(field)/sizeof(void*); i++)
+			{
+				field[i] = p.field[i].UNSAFE_Unverified();
+			}
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
@@ -640,29 +649,42 @@ namespace rlbox
 
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
-			tainted<T, TSandbox> result = -field;
+			tainted<T, TSandbox> result = - UNSAFE_Unverified();
 			return result;
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = field + unwrap(rhs);
+			tainted<T, TSandbox> result = UNSAFE_Unverified() + unwrap(rhs);
 			return result;
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = field - unwrap(rhs);
+			tainted<T, TSandbox> result = UNSAFE_Unverified() - unwrap(rhs);
 			return result;
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = field * unwrap(rhs);
+			tainted<T, TSandbox> result = UNSAFE_Unverified() * unwrap(rhs);
 			return result;
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		inline tainted<my_remove_extent_t<T>, TSandbox>& operator[] (size_t x) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			auto lastIndex = sizeof(T) / sizeof(my_remove_extent_t<T>);
+			if(x >= lastIndex)
+			{
+				abort();
+			}
+			my_remove_extent_t<T>* locPtr = &(maskedFieldPtr[x]);
+			return *((tainted<my_remove_extent_t<T>, TSandbox> *) locPtr);
 		}
 	};
 
@@ -708,6 +730,7 @@ namespace rlbox
 		}
 	public:
 
+		template<typename T2=T, ENABLE_IF(!my_is_array_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
 			return getAppSwizzledValue(field);
@@ -876,29 +899,42 @@ namespace rlbox
 
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
-			tainted<T, TSandbox> result = -field;
+			tainted<T, TSandbox> result = - UNSAFE_Unverified();
 			return result;
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = field + unwrap(rhs);
+			tainted<T, TSandbox> result = UNSAFE_Unverified() + unwrap(rhs);
 			return result;
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = field - unwrap(rhs);
+			tainted<T, TSandbox> result = UNSAFE_Unverified() - unwrap(rhs);
 			return result;
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = field * unwrap(rhs);
+			tainted<T, TSandbox> result = UNSAFE_Unverified() * unwrap(rhs);
 			return result;
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		inline tainted_volatile<my_remove_extent_t<T>, TSandbox>& operator[] (size_t x) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			auto lastIndex = sizeof(T) / sizeof(my_remove_extent_t<T>);
+			if(x >= lastIndex)
+			{
+				abort();
+			}
+			my_remove_extent_t<T>* locPtr = &(maskedFieldPtr[x]);
+			return *((tainted_volatile<my_remove_extent_t<T>, TSandbox> *) locPtr);
 		}
 	};
 
@@ -908,7 +944,8 @@ namespace rlbox
 	#define helper_tainted_volatile_createField(fieldType, fieldName, TSandbox) tainted_volatile<fieldType, TSandbox> fieldName;
 	#define helper_noOp()
 	#define helper_fieldInit(fieldType, fieldName, TSandbox) fieldName = p.fieldName;
-	#define helper_fieldAssign(fieldType, fieldName, TSandbox) ret.fieldName = fieldName;
+	#define helper_fieldCopy(fieldType, fieldName, TSandbox) { tainted<fieldType, TSandbox> temp = fieldName; memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); } 
+
 
 	#define tainted_data_specialization(T, libId, TSandbox) \
 	template<> \
@@ -917,18 +954,12 @@ namespace rlbox
 	public: \
 		sandbox_fields_reflection_##libId##_class_##T(helper_tainted_volatile_createField, helper_noOp, TSandbox) \
 		\
-		/*inline T UNSAFE_Unverified() const noexcept */\
-		/*{ */\
-		/*	tainted<T, TSandbox> ret; */\
-		/*	sandbox_fields_reflection_##libId##_class_##T(helper_fieldAssign, helper_noOp, TSandbox) */\
-		/*	return ret.UNSAFE_Unverified(); */\
-		/*} */\
-		/**/\
-		/*inline operator tainted<T, TSandbox>() const */\
-		/*{ */\
-		/*	tainted<T, TSandbox> fieldCopy(*this); */\
-		/*	return fieldCopy; */\
-		/*} */\
+		inline T UNSAFE_Unverified() const noexcept \
+		{ \
+			T ret; \
+			sandbox_fields_reflection_##libId##_class_##T(helper_fieldCopy, helper_noOp, TSandbox) \
+			return ret;\
+		} \
 	};\
 	template<> \
 	class tainted<T, TSandbox> \
@@ -960,7 +991,6 @@ namespace rlbox
 		/*	sandbox_fields_reflection_##libId##_class_##T(sandbox_unverified_data_fieldAssign, sandbox_unverified_data_noOp, TSandbox) */\
 		/*	return *this; */\
 		/*} */\
-	\
 	};
 
 	#define rlbox_load_library_api(libId, TSandbox) namespace rlbox { \
