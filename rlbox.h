@@ -13,7 +13,6 @@
 #include <map>
 #include <string.h>
 #include <cstdint>
-#include <limits>
 
 namespace rlbox
 {
@@ -569,7 +568,7 @@ namespace rlbox
 			uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(nonPointerType) * elementCount;
 
 			//check for overflow
-			if(!sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
+			if(((uintptr_t)maskedFieldPtr) >= arrayEnd || !sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
 			{
 				return defaultValue;
 			}
@@ -583,10 +582,6 @@ namespace rlbox
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto elementCount = strlen(maskedFieldPtr) + 1;
-			if(elementCount >= std::numeric_limits<std::uint32_t>::max())
-			{
-				return defaultValue;
-			}
 
 			auto ret = copyAndVerifyArray(sandbox, verifyFunction, elementCount, defaultValue);
 			if(ret != defaultValue)
@@ -807,7 +802,7 @@ namespace rlbox
 			uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(nonPointerType) * elementCount;
 
 			//check for overflow
-			if(!sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
+			if(((uintptr_t)maskedFieldPtr) >= arrayEnd || !sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
 			{
 				return defaultValue;
 			}
@@ -821,10 +816,6 @@ namespace rlbox
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto elementCount = strlen(maskedFieldPtr) + 1;
-			if(elementCount >= std::numeric_limits<std::uint32_t>::max())
-			{
-				return defaultValue;
-			}
 
 			auto ret = copyAndVerifyArray(sandbox, verifyFunction, elementCount, defaultValue);
 			if(ret != defaultValue)

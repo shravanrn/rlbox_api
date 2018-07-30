@@ -2,6 +2,7 @@
 #include <type_traits>
 #include <dlfcn.h>
 #include <iostream>
+#include <limits>
 #include "libtest.h"
 #include "DynLibNoSandbox.h"
 #include "testlib_structs_for_cpp_api.h"
@@ -139,6 +140,13 @@ public:
 
 		auto ret2 = sandbox_invoke(sandbox, simpleAddTest, a, 22);
 		ENSURE(ret2.UNSAFE_Unverified() == 42);
+	}
+
+	void test64BitReturns()
+	{
+		auto ret2 = sandbox_invoke(sandbox, simpleLongAddTest, std::numeric_limits<std::uint32_t>::max(), 20);
+		unsigned long result = ((unsigned long)std::numeric_limits<std::uint32_t>::max()) + 20ul;
+		ENSURE(ret2.UNSAFE_Unverified() == result);		
 	}
 
 	void testTwoVerificationFunctionFormats()
@@ -309,6 +317,42 @@ public:
 		ENSURE(result == 45);
 	}
 
+	void testStructWithBadPtr()
+	{
+		auto resultT = sandbox_invoke(sandbox, simpleTestStructValBadPtr);
+		auto result = resultT
+			.copyAndVerify([this](tainted<testStruct, TSandbox>& val){ 
+				testStruct ret;
+				ret.fieldLong = val.fieldLong.copyAndVerify([](unsigned long val) { return val; });
+				ret.fieldString = val.fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+				ret.fieldBool = val.fieldBool.copyAndVerify([](unsigned int val) { return val; });
+				val.fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
+				return ret; 
+			});
+		ENSURE(result.fieldLong == 7 && 
+			strcmp(result.fieldString, "Hello") == 0 &&
+			result.fieldBool == 1 &&
+			strcmp(result.fieldFixedArr, "Bye") == 0);
+	}
+
+	void testStructPtrWithBadPtr()
+	{
+		auto resultT = sandbox_invoke(sandbox, simpleTestStructPtrBadPtr);
+		auto result = resultT
+			.copyAndVerify([this](tainted<testStruct, TSandbox>* val) { 
+				testStruct ret;
+				ret.fieldLong = val->fieldLong.copyAndVerify([](unsigned long val) { return val; });
+				ret.fieldString = val->fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+				ret.fieldBool = val->fieldBool.copyAndVerify([](unsigned int val) { return val; });
+				val->fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
+				return ret; 
+			});
+		ENSURE(result.fieldLong == 7 && 
+			strcmp(result.fieldString, "Hello") == 0 &&
+			result.fieldBool == 1 &&
+			strcmp(result.fieldFixedArr, "Bye") == 0);
+	}
+
 	void runTests()
 	{
 		sandbox = RLBoxSandbox<TSandbox>::createSandbox("", "./libtest.so");
@@ -322,6 +366,7 @@ public:
 		testAddressOfOperators();
 		testAppPointer();
 		testFunctionInvocation();
+		test64BitReturns();
 		testTwoVerificationFunctionFormats();
 		testPointerVerificationFunctionFormats();
 		testStackAndHeapArrAndStringParams();
@@ -333,11 +378,18 @@ public:
 		testStructurePointers();
 		testStatefulLambdas();
 	}
+
+	void runBadPointersTest()
+	{
+		testStructWithBadPtr();
+		testStructPtrWithBadPtr();
+	}
 };
 
 int main(int argc, char const *argv[])
 {
 	SandboxTests<DynLibNoSandbox> tester;
 	tester.runTests();
+	//the DynLibNoSandbox doesn't mask bad pointers, so can't test with 'runBadPointersTest'
 	return 0;
 }
