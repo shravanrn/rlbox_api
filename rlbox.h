@@ -230,8 +230,9 @@ namespace rlbox
 	{
 	private:
 		T* field;
+		sandbox_app_ptr_wrapper(T* f) : field(f) {}
 	public:
- 		template<typename U>
+		template<typename U>
 		friend class RLBoxSandbox;
 
 		inline T* UNSAFE_Unverified() const noexcept { return field; }
@@ -1491,9 +1492,7 @@ namespace rlbox
 		template<typename T, typename TSandbox2=TSandbox, ENABLE_IF(!rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox2>::value)>
 		inline sandbox_app_ptr_wrapper<T> app_ptr(T* arg)
 		{
-			sandbox_app_ptr_wrapper<T> ret;
-			ret.field = arg;
-			return ret;
+			return sandbox_app_ptr_wrapper<T>(arg);
 		}
 
 		template<typename T, typename TSandbox2=TSandbox, ENABLE_IF(rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox2>::value)>
