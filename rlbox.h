@@ -15,6 +15,7 @@
 #include <map>
 #include <string.h>
 #include <cstdint>
+#include <memory>
 
 
 namespace rlbox_detail {
@@ -732,9 +733,12 @@ namespace rlbox
 				return defaultValue;
 			}
 
-			nonPointerConstType* copy = new nonPointerConstType[elementCount];
-			memcpy(copy, maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
-			return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
+			std::unique_ptr<nonPointerConstType[]> copy(new nonPointerConstType[elementCount]);
+			memcpy(copy.get(), maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			if(verifyFunction(copy.get()) == RLBox_Verify_Status::SAFE) {
+				return copy.release();
+			}
+			return defaultValue;
 		}
 
 		inline my_decay_if_array_t<T> copyAndVerifyString(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
@@ -1050,9 +1054,12 @@ namespace rlbox
 				return defaultValue;
 			}
 
-			nonPointerConstType* copy = new nonPointerConstType[elementCount];
-			memcpy(copy, maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
-			return verifyFunction(copy) == RLBox_Verify_Status::SAFE? copy : defaultValue;
+			std::unique_ptr<nonPointerConstType[]> copy(new nonPointerConstType[elementCount]);
+			memcpy(copy.get(), maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			if(verifyFunction(copy.get()) == RLBox_Verify_Status::SAFE) {
+				return copy.release();
+			}
+			return defaultValue;
 		}
 
 		inline my_decay_if_array_t<T> copyAndVerifyString(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
