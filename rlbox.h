@@ -726,7 +726,8 @@ namespace rlbox
 			uintptr_t arrayEnd = maskedFieldInt + sizeof(nonPointerType) * elementCount;
 
 			//check for overflow
-			if(maskedFieldInt >= arrayEnd || !sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
+			if(maskedFieldInt >= arrayEnd
+				 || !sandbox->isPointerInSandboxMemoryOrNull(reinterpret_cast<void*>(arrayEnd)))
 			{
 				return defaultValue;
 			}
@@ -1043,7 +1044,8 @@ namespace rlbox
 			uintptr_t arrayEnd = maskedFieldInt + sizeof(nonPointerType) * elementCount;
 
 			//check for overflow
-			if(maskedFieldInt >= arrayEnd || !sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
+			if(maskedFieldInt >= arrayEnd
+				 || !sandbox->isPointerInSandboxMemoryOrNull(reinterpret_cast<void*>(arrayEnd)))
 			{
 				return defaultValue;
 			}
