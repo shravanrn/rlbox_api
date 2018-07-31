@@ -721,10 +721,11 @@ namespace rlbox
 			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
-			uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(nonPointerType) * elementCount;
+			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
+			uintptr_t arrayEnd = maskedFieldInt + sizeof(nonPointerType) * elementCount;
 
 			//check for overflow
-			if(((uintptr_t)maskedFieldPtr) >= arrayEnd || !sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
+			if(maskedFieldInt >= arrayEnd || !sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
 			{
 				return defaultValue;
 			}
@@ -1037,10 +1038,11 @@ namespace rlbox
 			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
-			uintptr_t arrayEnd = ((uintptr_t)maskedFieldPtr) + sizeof(nonPointerType) * elementCount;
+			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
+			uintptr_t arrayEnd = maskedFieldInt + sizeof(nonPointerType) * elementCount;
 
 			//check for overflow
-			if(((uintptr_t)maskedFieldPtr) >= arrayEnd || !sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
+			if(maskedFieldInt >= arrayEnd || !sandbox->isPointerInSandboxMemoryOrNull((void*)arrayEnd))
 			{
 				return defaultValue;
 			}
