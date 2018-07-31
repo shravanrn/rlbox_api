@@ -1,3 +1,5 @@
+/* -*- mode: C++; tab-width: 2; indent-tabs-mode: t; c-basic-offset: 2 -*- */
+
 #ifndef RLBOX_API
 #define RLBOX_API
 
