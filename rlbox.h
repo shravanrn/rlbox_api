@@ -1427,12 +1427,14 @@ namespace rlbox
 		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		void invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
+			// TODO: use std::forward?
 			this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(this, params)...);
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
+			// TODO: use std::forward?
 			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>(this, this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(this, params)...));
 			return ret;
 		}
@@ -1440,6 +1442,7 @@ namespace rlbox
 		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		return_argument<T> invokeWithFunctionPointerReturnAppPtr(T* fnPtr, TArgs&&... params)
 		{
+			// TODO: use std::forward?
 			auto ret = this->impl_InvokeFunctionReturnAppPtr(fnPtr, sandbox_removeWrapper(this, params)...);
 			return ret;
 		}
@@ -1568,6 +1571,7 @@ namespace rlbox
 		{
 			auto stateObject = new sandbox_callback_state<TSandbox>(this, (void*)(uintptr_t)fnPtr);
 			void* callbackReciever = (void*)(uintptr_t) sandbox_callback_receiver<TSandbox, TRet, sandbox_removeWrapper_t<TArgs>...>;
+			// TODO: use std::forward?
 			auto callbackRegisteredAddress = this->template impl_RegisterCallback<TRet, sandbox_removeWrapper_t<TArgs>...>((void*)(uintptr_t)fnPtr, callbackReciever, (void*)stateObject);
 			using fnType = TRet(sandbox_removeWrapper_t<TArgs>...);
 			auto ret = sandbox_callback_helper<fnType, TSandbox>(this, (fnType*)(uintptr_t)callbackRegisteredAddress, stateObject);
