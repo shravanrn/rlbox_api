@@ -724,7 +724,9 @@ namespace rlbox
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
-			uintptr_t arrayEnd = maskedFieldInt + sizeof(nonPointerType) * elementCount;
+			// XXX need to check for multiplication for overflow
+			size_t arrayByteLen = sizeof(nonPointerType) * elementCount;
+			uintptr_t arrayEnd = maskedFieldInt + arrayByteLen;
 
 			//check for overflow
 			if(maskedFieldInt >= arrayEnd
@@ -734,7 +736,7 @@ namespace rlbox
 			}
 
 			std::unique_ptr<nonPointerConstType[]> copy(new nonPointerConstType[elementCount]);
-			memcpy(copy.get(), maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			memcpy(copy.get(), maskedFieldPtr, arrayByteLen);
 			if(verifyFunction(copy.get()) == RLBox_Verify_Status::SAFE) {
 				return copy.release();
 			}
@@ -1043,9 +1045,13 @@ namespace rlbox
 			typedef my_remove_pointer_t<T> nonPointerType;
 			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
 
+			static_assert(sizeof(nonPointerType) == sizeof(nonPointerConstType), "what?");
+
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
-			uintptr_t arrayEnd = maskedFieldInt + sizeof(nonPointerType) * elementCount;
+			// XXX need to check multiplication for overflow
+			size_t arrayByteLen = sizeof(nonPointerType) * elementCount;
+			uintptr_t arrayEnd = maskedFieldInt + arrayByteLen;
 
 			//check for overflow
 			if(maskedFieldInt >= arrayEnd
@@ -1055,7 +1061,7 @@ namespace rlbox
 			}
 
 			std::unique_ptr<nonPointerConstType[]> copy(new nonPointerConstType[elementCount]);
-			memcpy(copy.get(), maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			memcpy(copy.get(), maskedFieldPtr, arrayByteLen);
 			if(verifyFunction(copy.get()) == RLBox_Verify_Status::SAFE) {
 				return copy.release();
 			}
@@ -1385,6 +1391,7 @@ namespace rlbox
 		template<typename T>
 		tainted<T*, TSandbox> mallocInSandbox(unsigned int count=1)
 		{
+			// XXX do we need to check this multiplication for overflow?
 			void* addr = this->impl_mallocInSandbox(sizeof(T) * count);
 			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr), false /* isFuncPtr */))
 			{
