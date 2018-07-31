@@ -270,19 +270,6 @@ namespace rlbox
 			other.arrSize = 0;
 		}
 
-		sandbox_stackarr_helper& operator=(const sandbox_stackarr_helper&& other)  
-		{
-			if (this != &other)  
-			{
-				sandbox = other.sandbox;
-				field = other.field;
-				arrSize = other.arrSize;
-				other.sandbox = nullptr;
-				other.field = nullptr;
-				other.arrSize = 0;
-			}
-		}
-
 		~sandbox_stackarr_helper()
 		{
 			if(field != nullptr)
@@ -314,17 +301,6 @@ namespace rlbox
 		{
 			this->sandbox = sandbox;
 			this->field = field;
-		}
-
-		sandbox_heaparr_helper& operator=(const sandbox_heaparr_helper&& other)  
-		{
-			if (this != &other)  
-			{
-				sandbox = other.sandbox;
-				field = other.field;
-				other.sandbox = nullptr;
-				other.field = nullptr;
-			}
 		}
 
 		~sandbox_heaparr_helper()
@@ -382,20 +358,6 @@ namespace rlbox
 			other.registeredCallback = nullptr;
 			other.sandbox = nullptr;
 			other.stateObject = nullptr;
-		}
-
-		sandbox_callback_helper& operator=(sandbox_callback_helper&& other)  
-		{
-			if (this != &other)  
-			{
-				registeredCallback = other.registeredCallback;
-				sandbox = other.sandbox;
-				stateObject = other.stateObject;
-				other.registeredCallback = nullptr;
-				other.sandbox = nullptr;
-				other.stateObject = nullptr;
-			}
-			return *this;
 		}
 
 		~sandbox_callback_helper()
