@@ -20,29 +20,6 @@ namespace RLBox_DynLib_detail {
 
 	template <typename T>
 	using return_argument = decltype(return_argument_helper(std::declval<T>()));
-
-	//Adapted to C++ 11 from C++14 version at https://stackoverflow.com/questions/37602057/why-isnt-a-for-loop-a-compile-time-expression
-	template<std::size_t N>
-	struct num { static const constexpr auto value = N; };
-
-	template <class F, unsigned int I, unsigned int N, typename std::enable_if<!(I < N)>::type* = nullptr>
-	void for_helper(F func)
-	{
-	}
-
-	template <class F, unsigned int I, unsigned int N, typename std::enable_if<(I < N)>::type* = nullptr>
-	void for_helper(F func)
-	{
-		func(num<I>{});
-		for_helper<F, I + 1, N>(func);
-	}
-
-	template <std::size_t N, typename F>
-	void for_(F func)
-	{
-		for_helper<F, 0, N>(func);
-	}
-
 };
 
 class RLBox_DynLib
@@ -61,6 +38,24 @@ private:
 		using fnType = TRet(*)(TArgs..., void*);
 		fnType fnPtr = (fnType)(uintptr_t) dynLib_SavedState->allowedFunctions[N];
 		return fnPtr(params..., dynLib_SavedState->functionState[N]);
+	}
+
+	template<unsigned int I, unsigned int N, typename TRet, typename... TArgs, typename std::enable_if<!(I < N)>::type* = nullptr>
+	void impl_RegisterCallback_helper(void* callback, void* state, void*& result)
+	{
+	}
+
+	template<unsigned int I, unsigned int N, typename TRet, typename... TArgs, typename std::enable_if<(I < N)>::type* = nullptr>
+	void impl_RegisterCallback_helper(void* callback, void* state, void*& result)
+	{
+		if(!result && allowedFunctions[I] == nullptr)
+		{
+			allowedFunctions[I] = (void*)(uintptr_t) callback;
+			functionState[I] = state;
+			result = (void*)(uintptr_t) impl_CallbackReceiver<I, TRet, TArgs...>;
+		}
+
+		impl_RegisterCallback_helper<I+1, N, TRet, TArgs...>(callback, state, result);
 	}
 
 public:
@@ -126,16 +121,7 @@ public:
 	void* impl_RegisterCallback(void* callback, void* state)
 	{
 		void* result = nullptr;
-		//for loop with constexpr i
-		RLBox_DynLib_detail::for_<CALLBACK_SLOT_COUNT>([&](auto i) {
-			if(!result && allowedFunctions[i.value] == nullptr)
-			{
-				allowedFunctions[i.value] = (void*)(uintptr_t) callback;
-				functionState[i.value] = state;
-				result = (void*)(uintptr_t) impl_CallbackReceiver<i.value, TRet, TArgs...>;
-			}
-		});
-
+		impl_RegisterCallback_helper<0, CALLBACK_SLOT_COUNT, TRet, TArgs...>(callback, state, result);
 		return result;
 	}
 
