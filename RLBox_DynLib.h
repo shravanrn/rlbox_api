@@ -4,7 +4,7 @@
 #include <utility>
 #include <stdint.h>
 
-namespace DynLibNoSandbox_detail {
+namespace RLBox_DynLib_detail {
 	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
 	template<typename Ret, typename... Rest>
 	Ret return_argument_helper(Ret(*) (Rest...));
@@ -45,12 +45,10 @@ namespace DynLibNoSandbox_detail {
 
 };
 
-class DynLibNoSandbox;
-extern thread_local DynLibNoSandbox* dynLibNoSandbox_SavedState;
-
-class DynLibNoSandbox
+class RLBox_DynLib
 {
 private:
+	static thread_local RLBox_DynLib* dynLib_SavedState;
 	static const unsigned int CALLBACK_SLOT_COUNT = 32;
 	void* allowedFunctions[CALLBACK_SLOT_COUNT];
 	void* functionState[CALLBACK_SLOT_COUNT];
@@ -61,8 +59,8 @@ private:
 	static TRet impl_CallbackReceiver(TArgs... params)
 	{
 		using fnType = TRet(*)(TArgs..., void*);
-		fnType fnPtr = (fnType)(uintptr_t) dynLibNoSandbox_SavedState->allowedFunctions[N];
-		return fnPtr(params..., dynLibNoSandbox_SavedState->functionState[N]);
+		fnType fnPtr = (fnType)(uintptr_t) dynLib_SavedState->allowedFunctions[N];
+		return fnPtr(params..., dynLib_SavedState->functionState[N]);
 	}
 
 public:
@@ -93,7 +91,7 @@ public:
 		pushPopCount--;
 		if(pushPopCount < 0)
 		{
-			printf("Error - DynLibNoSandbox popCount was negative.\n");
+			printf("Error - RLBox_DynLib popCount was negative.\n");
 			exit(1);
 		}
 		return free(ptr);
@@ -129,7 +127,7 @@ public:
 	{
 		void* result = nullptr;
 		//for loop with constexpr i
-		DynLibNoSandbox_detail::for_<CALLBACK_SLOT_COUNT>([&](auto i) {
+		RLBox_DynLib_detail::for_<CALLBACK_SLOT_COUNT>([&](auto i) {
 			if(!result && allowedFunctions[i.value] == nullptr)
 			{
 				allowedFunctions[i.value] = (void*)(uintptr_t) callback;
@@ -167,14 +165,14 @@ public:
 	}
 
 	template <typename T, typename ... TArgs>
-	DynLibNoSandbox_detail::return_argument<T> impl_InvokeFunction(T* fnPtr, TArgs... params)
+	RLBox_DynLib_detail::return_argument<T> impl_InvokeFunction(T* fnPtr, TArgs... params)
 	{
-		dynLibNoSandbox_SavedState = this;
+		dynLib_SavedState = this;
 		return (*fnPtr)(params...);
 	}
 
 	template <typename T, typename ... TArgs>
-	DynLibNoSandbox_detail::return_argument<T> impl_InvokeFunctionReturnAppPtr(T* fnPtr, TArgs... params)
+	RLBox_DynLib_detail::return_argument<T> impl_InvokeFunctionReturnAppPtr(T* fnPtr, TArgs... params)
 	{
 		return impl_InvokeFunction(fnPtr, params...);
 	}

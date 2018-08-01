@@ -4,7 +4,7 @@
 #include <iostream>
 #include <limits>
 #include "libtest.h"
-#include "DynLibNoSandbox.h"
+#include "RLBox_DynLib.h"
 #include "testlib_structs_for_cpp_api.h"
 #include "rlbox.h"
 
@@ -27,7 +27,7 @@ void printTypes()
 
 //////////////////////////////////////////////////////////////////
 
-rlbox_load_library_api(testlib, DynLibNoSandbox)
+rlbox_load_library_api(testlib, RLBox_DynLib)
 
 //////////////////////////////////////////////////////////////////
 
@@ -402,8 +402,8 @@ public:
 
 int main(int argc, char const *argv[])
 {
-	SandboxTests<DynLibNoSandbox> tester;
+	SandboxTests<RLBox_DynLib> tester;
 	tester.runTests();
-	//the DynLibNoSandbox doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
 	return 0;
 }
