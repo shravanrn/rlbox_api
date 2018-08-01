@@ -301,19 +301,23 @@ namespace rlbox
 	private:
 		TSandbox* sandbox;
 		T* registeredCallback;
+		char* stateObject;
 	public:
 
-		sandbox_callback_helper(TSandbox* sandbox, T* registeredCallback)
+		sandbox_callback_helper(TSandbox* sandbox, T* registeredCallback, char* stateObject)
 		{
 			this->sandbox = sandbox;
 			this->registeredCallback = registeredCallback;
+			this->stateObject = stateObject;
 		}
 		sandbox_callback_helper(sandbox_callback_helper&& other)
 		{
 			registeredCallback = other.registeredCallback;
 			sandbox = other.sandbox;
+			stateObject = other.stateObject;
 			other.registeredCallback = nullptr;
 			other.sandbox = nullptr;
+			other.stateObject = nullptr;
 		}
 
 		sandbox_callback_helper& operator=(const sandbox_callback_helper&& other)  
@@ -322,8 +326,10 @@ namespace rlbox
 			{
 				registeredCallback = other.registeredCallback;
 				sandbox = other.sandbox;
+				stateObject = other.stateObject;
 				other.registeredCallback = nullptr;
 				other.sandbox = nullptr;
+				other.stateObject = nullptr;
 			}
 		}
 
@@ -332,6 +338,7 @@ namespace rlbox
 			if(registeredCallback != nullptr)
 			{
 				sandbox->impl_UnregisterCallback(registeredCallback);
+				delete stateObject;
 			}
 		}
 
@@ -701,15 +708,15 @@ namespace rlbox
 		tainted_volatile(const tainted_volatile<T, TSandbox>& p) = default;
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
-		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg) const
+		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
 			return arg;
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg) const
+		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
-			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg);
+			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg, exampleUnsandboxedPtr);
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
@@ -719,16 +726,16 @@ namespace rlbox
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg) const
+		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleSandboxedPtr) const
 		{
-			return (T) TSandbox::impl_GetSandboxedPointer((void*) arg);
+			return (T) TSandbox::impl_GetSandboxedPointer((void*) arg, exampleSandboxedPtr);
 		}
 	public:
 
 		template<typename T2=T, ENABLE_IF(!my_is_array_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
-			return getAppSwizzledValue(field);
+			return getAppSwizzledValue(field, (void*) &field /* exampleUnsandboxedPtr */);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
@@ -851,7 +858,7 @@ namespace rlbox
 		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted<TRHS, TSandbox>& arg) noexcept
 		{
-			field = getSandboxSwizzledValue(arg.field);
+			field = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleSandboxedPtr */);
 			return *this;
 		}
 
@@ -872,7 +879,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
 		{
-			auto ret = (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) getAppSwizzledValue(field);
+			auto ret = (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) getAppSwizzledValue(field, (void*) &field /* exampleUnsandboxedPtr */);
 			return *ret;
 		}
 
@@ -1115,6 +1122,13 @@ namespace rlbox
 			return ret;
 		}
 
+		template <typename T, typename ... TArgs, ENABLE_IF(my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		return_argument<T> invokeWithFunctionPointerReturnAppPtr(T* fnPtr, TArgs&&... params)
+		{
+			auto ret = this->impl_InvokeFunctionReturnAppPtr(fnPtr, sandbox_removeWrapper(params)...);
+			return ret;
+		}
+
 		void* getFunctionPointerFromCache(const char* fnName)
 		{
 			void* fnPtr;
@@ -1191,7 +1205,7 @@ namespace rlbox
 			void* callbackReciever = (void*)(uintptr_t) sandbox_callback_receiver<TSandbox, TRet, sandbox_removeWrapper_t<TArgs>...>;
 			auto callbackRegisteredAddress = this->template impl_RegisterCallback<TRet, sandbox_removeWrapper_t<TArgs>...>(callbackReciever, (void*)stateObject);
 			using fnType = TRet(sandbox_removeWrapper_t<TArgs>...);
-			auto ret = sandbox_callback_helper<fnType, TSandbox>(this, (fnType*)(uintptr_t)callbackRegisteredAddress);
+			auto ret = sandbox_callback_helper<fnType, TSandbox>(this, (fnType*)(uintptr_t)callbackRegisteredAddress, (char*) stateObject);
 			return ret;
 		}
 
@@ -1199,8 +1213,9 @@ namespace rlbox
 
 	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
 	#define sandbox_invoke_static(sandbox, fnName, ...) sandbox->invokeStatic(&fnName, ##__VA_ARGS__)
+	#define sandbox_invoke_return_app_ptr(sandbox, fnName, ...) sandbox->invokeWithFunctionPointerReturnAppPtr((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
 	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
-
+	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
 
 	#undef UNUSED
 }

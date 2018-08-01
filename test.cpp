@@ -317,6 +317,19 @@ public:
 		ENSURE(result == 45);
 	}
 
+	void testAppPtrFunctionReturn()
+	{
+		#if defined(_M_X64) || defined(__x86_64__)
+			int* val = (int*)0x1234567812345678;
+		#else
+			int* val = (int*)0x12345678;
+		#endif
+
+		auto appPtr = sandbox->app_ptr(val);
+		auto resultT = sandbox_invoke_return_app_ptr(sandbox, echoPointer, appPtr);
+		ENSURE(resultT == val);
+	}
+
 	void testStructWithBadPtr()
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructValBadPtr);
@@ -377,6 +390,7 @@ public:
 		testStructures();
 		testStructurePointers();
 		testStatefulLambdas();
+		testAppPtrFunctionReturn();
 	}
 
 	void runBadPointersTest()
