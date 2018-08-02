@@ -22,6 +22,8 @@ namespace RLBox_DynLib_detail {
 	using return_argument = decltype(return_argument_helper(std::declval<T>()));
 };
 
+#define ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
+
 class RLBox_DynLib
 {
 private:
@@ -102,6 +104,16 @@ public:
 		return p;
 	}
 
+	inline void* impl_GetUnsandboxedPointer(void* p)
+	{
+		return p;
+	}
+	
+	inline void* impl_GetSandboxedPointer(void* p)
+	{
+		return p;
+	}
+
 	inline void* impl_KeepAddressInSandboxedRange(void* p)
 	{
 		return p;
@@ -163,3 +175,5 @@ public:
 		return impl_InvokeFunction(fnPtr, params...);
 	}
 };
+
+#undef ENABLE_IF

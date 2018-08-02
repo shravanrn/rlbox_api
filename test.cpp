@@ -247,13 +247,19 @@ public:
 
 	void testFloatingPoint()
 	{
-		auto resultF = sandbox_invoke(sandbox, simpleFloatAddTest, 1.0, 2.0)
-			.copyAndVerify([](double val){ return val > 0 && val < 100? val : -1.0; });
+		auto resultF = sandbox_invoke(sandbox, simpleFloatAddTest, 1.0f, 2.0f)
+			.copyAndVerify([](float val){ return val > 0 && val < 100? val : -1.0; });
 		ENSURE(resultF == 3.0);
 
 		auto resultD = sandbox_invoke(sandbox, simpleDoubleAddTest, 1.0, 2.0)
 			.copyAndVerify([](double val){ return val > 0 && val < 100? val : -1.0; });
 		ENSURE(resultD == 3.0);
+
+		//test float to double conversions
+
+		auto resultFD = sandbox_invoke(sandbox, simpleFloatAddTest, 1.0, 2.0)
+			.copyAndVerify([](double val){ return val > 0 && val < 100? val : -1.0; });
+		ENSURE(resultFD == 3.0);
 	}
 
 	void testStructures()

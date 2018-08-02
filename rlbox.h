@@ -349,9 +349,9 @@ namespace rlbox
 	class sandbox_callback_state
 	{
 	public:
-		TSandbox * const sandbox;
+		RLBoxSandbox<TSandbox> * const sandbox;
 		TFunc * const actualCallback;
-		sandbox_callback_state(TSandbox* p_sandbox, TFunc* p_actualCallback) : sandbox(p_sandbox), actualCallback(p_actualCallback)
+		sandbox_callback_state(RLBoxSandbox<TSandbox>* p_sandbox, TFunc* p_actualCallback) : sandbox(p_sandbox), actualCallback(p_actualCallback)
 		{
 		}
 	};
@@ -360,7 +360,7 @@ namespace rlbox
 
 	template <typename T, typename TSandbox>
 	inline my_enable_if_t<my_is_fundamental_v<T>,
-	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, T retRaw)
+	tainted<T, TSandbox>> sandbox_convertToUnverified(RLBoxSandbox<TSandbox>* sandbox, T retRaw)
 	{
 		//primitives are returned by value
 		auto retRawPtr = (tainted<T, TSandbox> *) &retRaw;
@@ -369,7 +369,7 @@ namespace rlbox
 
 	template <typename T, typename TSandbox>
 	inline my_enable_if_t<my_is_pointer_v<T>,
-	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, T retRaw)
+	tainted<T, TSandbox>> sandbox_convertToUnverified(RLBoxSandbox<TSandbox>* sandbox, T retRaw)
 	{
 		//pointers are returned by value
 		auto retRawPtr = (tainted<T, TSandbox> *) &retRaw;
@@ -378,7 +378,7 @@ namespace rlbox
 
 	template <typename T, typename TSandbox>
 	inline my_enable_if_t<my_is_array_v<T>,
-	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, my_remove_extent_t<T>* retRaw)
+	tainted<T, TSandbox>> sandbox_convertToUnverified(RLBoxSandbox<TSandbox>* sandbox, my_remove_extent_t<T>* retRaw)
 	{
 		//arrays are normally returned by decaying into a pointer, and returning the pointer
 		//but tainted<Foo[]> is returned by value, so copy happens automatically on return - so no additional copying needed
@@ -388,23 +388,21 @@ namespace rlbox
 
 	template <typename T, typename TSandbox>
 	inline my_enable_if_t<my_is_class_v<T>,
-	tainted<T, TSandbox>> sandbox_convertToUnverified(TSandbox* sandbox, T retRaw)
+	tainted<T, TSandbox>> sandbox_convertToUnverified(RLBoxSandbox<TSandbox>* sandbox, T retRaw)
 	{
-		//Structs may have fields which are pointers, each of these have to unswizzled
-		//This is performed in the automatic conversion from tainted_volatile to tainted in the return statement
-		T structCopy;
+		tainted<T, TSandbox> structCopy;
 		memcpy(&structCopy, &retRaw, sizeof(T));
-		auto retRawPtr = (tainted_volatile<T, TSandbox> *) &structCopy;
-		return *retRawPtr;
+		//Structs may have fields which are pointers, each of these have to unswizzled
+		structCopy.unsandboxPointers(sandbox);
+		return structCopy;
 	}
-
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <typename TSandbox, typename TRet, typename... TArgs>
 	__attribute__ ((noinline)) TRet sandbox_callback_receiver(TArgs... params, void* state)
 	{
-		auto stateObj = (sandbox_callback_state<TRet(TSandbox*, tainted<TArgs, TSandbox>...), TSandbox>*) state;
+		auto stateObj = (sandbox_callback_state<TRet(RLBoxSandbox<TSandbox>*, tainted<TArgs, TSandbox>...), TSandbox>*) state;
 		return stateObj->actualCallback(stateObj->sandbox, sandbox_convertToUnverified<TArgs>(stateObj->sandbox, params)...);
 	}
 
@@ -502,6 +500,17 @@ namespace rlbox
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
 			return field;
+		}
+
+		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		inline void unsandboxPointers(RLBoxSandbox<TSandbox>* sandbox)
+		{
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline void unsandboxPointers(RLBoxSandbox<TSandbox>* sandbox)
+		{
+			field = (T) sandbox->getUnsandboxedPointer((void*)field);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
@@ -943,7 +952,7 @@ namespace rlbox
 	#define helper_noOp()
 	#define helper_fieldInit(fieldType, fieldName, TSandbox) fieldName = p.fieldName;
 	#define helper_fieldCopy(fieldType, fieldName, TSandbox) { tainted<fieldType, TSandbox> temp = fieldName; memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); } 
-
+	#define helper_fieldUnsandbox(fieldType, fieldName, TSandbox) fieldName.unsandboxPointers(sandbox);
 
 	#define tainted_data_specialization(T, libId, TSandbox) \
 	template<> \
@@ -1000,6 +1009,11 @@ namespace rlbox
 		{ \
 			sandbox_fields_reflection_##libId##_class_##T(helper_fieldInit, helper_noOp, TSandbox) \
 			return *this; \
+		} \
+		\
+		inline void unsandboxPointers(RLBoxSandbox<TSandbox>* sandbox) \
+		{ \
+			sandbox_fields_reflection_##libId##_class_##T(helper_fieldUnsandbox, helper_noOp, TSandbox)\
 		} \
 	};
 
@@ -1074,6 +1088,16 @@ namespace rlbox
 			return ret;
 		}
 
+		void* getSandboxedPointer(void* p)
+		{
+			return this->impl_GetSandboxedPointer(p);
+		}
+
+		void* getUnsandboxedPointer(void* p)
+		{
+			return this->impl_GetUnsandboxedPointer(p);
+		}
+
 		template<typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
 		void freeInSandbox(T* val)
 		{
@@ -1084,7 +1108,7 @@ namespace rlbox
 		void freeInSandbox(T val)
 		{
 			return this->impl_freeInSandbox(val->UNSAFE_Unverified());
-		}		
+		}
 
 		bool isPointerInSandboxMemoryOrNull(const void* p)
 		{
@@ -1105,7 +1129,7 @@ namespace rlbox
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeStatic(T* fnPtr, TArgs&&... params)
 		{
-			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, fnPtr(sandbox_removeWrapper(params)...));
+			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>(this, fnPtr(sandbox_removeWrapper(params)...));
 			return ret;
 		}
 
@@ -1118,7 +1142,7 @@ namespace rlbox
 		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
-			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>((TSandbox*) this, this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(params)...));
+			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>(this, this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(params)...));
 			return ret;
 		}
 
