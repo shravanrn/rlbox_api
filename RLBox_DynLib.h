@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <utility>
 #include <stdint.h>
+#include <mutex>
 
 namespace RLBox_DynLib_detail {
 	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
@@ -28,9 +29,11 @@ class RLBox_DynLib
 {
 private:
 	static thread_local RLBox_DynLib* dynLib_SavedState;
+	std::mutex callbackMutex;
 	static const unsigned int CALLBACK_SLOT_COUNT = 32;
 	void* allowedFunctions[CALLBACK_SLOT_COUNT];
 	void* functionState[CALLBACK_SLOT_COUNT];
+	void* callbackUniqueKey[CALLBACK_SLOT_COUNT];
 	void* libHandle = nullptr;
 	int pushPopCount = 0;
 
@@ -43,21 +46,22 @@ private:
 	}
 
 	template<unsigned int I, unsigned int N, typename TRet, typename... TArgs, typename std::enable_if<!(I < N)>::type* = nullptr>
-	void impl_RegisterCallback_helper(void* callback, void* state, void*& result)
+	void impl_RegisterCallback_helper(void* key, void* callback, void* state, void*& result)
 	{
 	}
 
 	template<unsigned int I, unsigned int N, typename TRet, typename... TArgs, typename std::enable_if<(I < N)>::type* = nullptr>
-	void impl_RegisterCallback_helper(void* callback, void* state, void*& result)
+	void impl_RegisterCallback_helper(void* key, void* callback, void* state, void*& result)
 	{
-		if(!result && allowedFunctions[I] == nullptr)
+		if(!result && callbackUniqueKey[I] == nullptr)
 		{
-			allowedFunctions[I] = (void*)(uintptr_t) callback;
+			callbackUniqueKey[I] = key;
+			allowedFunctions[I] = callback;
 			functionState[I] = state;
 			result = (void*)(uintptr_t) impl_CallbackReceiver<I, TRet, TArgs...>;
 		}
 
-		impl_RegisterCallback_helper<I+1, N, TRet, TArgs...>(callback, state, result);
+		impl_RegisterCallback_helper<I+1, N, TRet, TArgs...>(key, callback, state, result);
 	}
 
 public:
@@ -130,20 +134,22 @@ public:
 	}
 
 	template<typename TRet, typename... TArgs>
-	void* impl_RegisterCallback(void* callback, void* state)
+	inline void* impl_RegisterCallback(void* key, void* callback, void* state)
 	{
+		std::lock_guard<std::mutex> lock(callbackMutex);
 		void* result = nullptr;
-		impl_RegisterCallback_helper<0, CALLBACK_SLOT_COUNT, TRet, TArgs...>(callback, state, result);
+		impl_RegisterCallback_helper<0, CALLBACK_SLOT_COUNT, TRet, TArgs...>(key, callback, state, result);
 		return result;
 	}
 
-	template<typename TRet, typename... TArgs>
-	void impl_UnregisterCallback(TRet(*callback)(TArgs...))
+	inline void impl_UnregisterCallback(void* key)
 	{
+		std::lock_guard<std::mutex> lock(callbackMutex);
 		for(unsigned int i = 0; i < CALLBACK_SLOT_COUNT; i++)
 		{
-			if(allowedFunctions == (void*)(uintptr_t)callback)
+			if(callbackUniqueKey[i] == key)
 			{
+				callbackUniqueKey[i] = nullptr;
 				allowedFunctions[i] = nullptr;
 				functionState[i] = nullptr;
 				break;
