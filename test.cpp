@@ -5,6 +5,7 @@
 #include <limits>
 #include "libtest.h"
 #include "RLBox_DynLib.h"
+#include "RLBox_NaCl.h"
 #include "testlib_structs_for_cpp_api.h"
 #include "rlbox.h"
 
@@ -28,6 +29,7 @@ void printTypes()
 //////////////////////////////////////////////////////////////////
 
 rlbox_load_library_api(testlib, RLBox_DynLib)
+rlbox_load_library_api(testlib, RLBox_NaCl)
 
 //////////////////////////////////////////////////////////////////
 
@@ -372,9 +374,13 @@ public:
 			strcmp(result.fieldFixedArr, "Bye") == 0);
 	}
 
+	void init(const char* runtimePath, const char* libraryPath)
+	{
+		sandbox = RLBoxSandbox<TSandbox>::createSandbox(runtimePath, libraryPath);
+	}
+
 	void runTests()
 	{
-		sandbox = RLBoxSandbox<TSandbox>::createSandbox("", "./libtest.so");
 		testSizes();
 		testAssignment();
 		testBinaryOperators();
@@ -408,8 +414,15 @@ public:
 
 int main(int argc, char const *argv[])
 {
-	SandboxTests<RLBox_DynLib> tester;
-	tester.runTests();
+	printf("Testing dyn lib\n");
+	SandboxTests<RLBox_DynLib> testerDynLib;
+	testerDynLib.init("", "./libtest.so");
+	testerDynLib.runTests();
 	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+
+	printf("Testing NaCl\n");
+	SandboxTests<RLBox_NaCl> testerNaCl;
+	testerNaCl.init("../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe", "./libtest.nexe");
+	testerNaCl.runTests();
 	return 0;
 }
