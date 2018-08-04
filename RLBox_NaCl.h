@@ -5,6 +5,7 @@
 #include <mutex>
 #include <type_traits>
 #include <functional>
+#include <vector>
 #include "dyn_ldr_lib.h"
 
 namespace RLBox_NaCl_detail {
@@ -63,6 +64,9 @@ private:
 	NaClSandbox* sandbox;
 	std::once_flag initFlag;
 	std::mutex callbackMutex;
+	#if defined(_M_IX86) || defined(__i386__)
+		static std::vector<NaClSandbox*> sandboxList;
+	#endif
 
 	class NaClSandboxStateWrapper
 	{
@@ -278,10 +282,13 @@ public:
 		sandbox = createDlSandbox(sandboxRuntimePath, libraryPath);
 		if(!sandbox)
 		{
-			printf("Failed tp create sandbox for: %s\n", libraryPath);
+			printf("Failed to create sandbox for: %s\n", libraryPath);
 			exit(1);
 		}
 		sandbox->extraState = (void*) this;
+		#if defined(_M_IX86) || defined(__i386__)
+			sandboxList.push_back(sandbox);
+		#endif
 	}
 	inline void* impl_mallocInSandbox(size_t size)
 	{
@@ -315,26 +322,48 @@ public:
 	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
-			//2 bit mask
-			uintptr_t mask = exampleUnsandboxedPtr & 0xC0000000;
-			uintptr_t suffix = p & 0x3FFFFFFF;
-			uintptr_t ret = mask | suffix;
+			for(NaClSandbox* sandbox : sandboxList)
+			{
+				size_t memSize = 0x3FFFFFFF;
+				uintptr_t base = getSandboxMemoryBase(sandbox);
+				uintptr_t exampleVal = (uintptr_t)exampleUnsandboxedPtr;
+				if(exampleVal >= base && exampleVal < (base + memSize))
+				{
+					return (void*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
+				}
+			}
+			printf("Could not find sandbox for address: %p\n", p);
+			exit(1);
 		#elif defined(_M_X64) || defined(__x86_64__)
 			//32 bit mask
 			uintptr_t mask = ((uintptr_t)exampleUnsandboxedPtr) & 0xFFFFFFFF00000000;
 			uintptr_t suffix = ((uintptr_t)p) & 0xFFFFFFFF;
 			uintptr_t ret = mask | suffix;
+			return (void*) ret;
 		#else
 			#error Unsupported platform!
 		#endif
-
-		return (void*) ret;
 	}
 
 	static inline void* impl_GetSandboxedPointer(void* p, void* exampleSandboxedPtr)
 	{
-		//same code - just reuse
-		return impl_GetUnsandboxedPointer(p, exampleSandboxedPtr);
+		#if defined(_M_IX86) || defined(__i386__)
+			for(NaClSandbox* sandbox : sandboxList)
+			{
+				size_t memSize = 0x3FFFFFFF;
+				uintptr_t base = getSandboxMemoryBase(sandbox);
+				uintptr_t pVal = (uintptr_t)p;
+				if(pVal >= base && pVal < (base + memSize))
+				{
+					return (void*) getSandboxedAddress(sandbox, (uintptr_t)p);
+				}
+			}
+			printf("Could not find sandbox for address: %p\n", p);
+			exit(1);
+		#else
+			//same code - just reuse
+			return impl_GetUnsandboxedPointer(p, exampleSandboxedPtr);
+		#endif
 	}
 
 	inline void* impl_GetUnsandboxedPointer(void* p)
@@ -352,20 +381,23 @@ public:
 	inline void* impl_KeepAddressInSandboxedRange(void* p)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
-			//2 bit mask
-			uintptr_t mask = getSandboxMemoryBase(sandbox);
-			uintptr_t suffix = p & 0x3FFFFFFF;
-			uintptr_t ret = mask | suffix;
+			size_t memSize = 0x3FFFFFFF;
+			uintptr_t base = getSandboxMemoryBase(sandbox);
+			uintptr_t pVal = (uintptr_t)p;
+			if(pVal >= base && pVal < (base + memSize))
+			{
+				return (void*) pVal;
+			}
+			return (void*) (base + (memSize/2));
 		#elif defined(_M_X64) || defined(__x86_64__)
 			//32 bit mask
 			uintptr_t mask = getSandboxMemoryBase(sandbox);
 			uintptr_t suffix = ((uintptr_t)p) & 0xFFFFFFFF;
 			uintptr_t ret = mask | suffix;
+			return (void*) ret;
 		#else
 			#error Unsupported platform!
 		#endif
-
-		return (void*) ret;
 	}
 
 	inline bool impl_isPointerInSandboxMemoryOrNull(const void* p)
@@ -440,5 +472,9 @@ public:
 		return (RLBox_NaCl_detail::return_argument<T>) ret;
 	}
 };
+
+#if defined(_M_IX86) || defined(__i386__)
+	std::vector<NaClSandbox*> RLBox_NaCl::sandboxList __attribute__((weak));
+#endif
 
 #undef ENABLE_IF
