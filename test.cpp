@@ -244,8 +244,7 @@ public:
 		auto isStringSame = strcmp(str, retStr) == 0;
 		ENSURE(isStringSame);
 
-		////////////////////////////////TODO - fix!!
-		sandbox->freeInSandbox(strInSandbox);
+		sandbox->freeInSandbox(temp);
 	}
 
 	void testFloatingPoint()
@@ -393,17 +392,17 @@ public:
 		testAppPointer();
 		testFunctionInvocation();
 		test64BitReturns();
-		// testTwoVerificationFunctionFormats();
-		// testPointerVerificationFunctionFormats();
-		// testStackAndHeapArrAndStringParams();
-		// testCallback();
-		// testCallbackOnStruct();
-		// testEchoAndPointerLocations();
-		// testFloatingPoint();
-		// testStructures();
-		// testStructurePointers();
-		// testStatefulLambdas();
-		// testAppPtrFunctionReturn();
+		testTwoVerificationFunctionFormats();
+		testPointerVerificationFunctionFormats();
+		testStackAndHeapArrAndStringParams();
+		testCallback();
+		testCallbackOnStruct();
+		testEchoAndPointerLocations();
+		testFloatingPoint();
+		testStructures();
+		testStructurePointers();
+		testStatefulLambdas();
+		testAppPtrFunctionReturn();
 	}
 
 	void runBadPointersTest()

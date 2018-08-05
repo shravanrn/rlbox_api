@@ -1089,34 +1089,40 @@ namespace rlbox
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	template<bool... Conds>
+	struct and_ : std::true_type {};
+
+	template<bool Cond, bool... Conds>
+	struct and_<Cond, Conds...> : std::conditional<Cond, and_<Conds...>, std::false_type>::type {};
+
 	//base case
-	template<typename TSandbox, typename Ret>
-	std::true_type sandbox_callback_all_args_are_tainted_helper(Ret(*) ());
+	// template<typename TSandbox, typename Ret>
+	// std::true_type sandbox_callback_all_args_are_tainted_helper(Ret(*) ());
 
-	//check if first arg is tainted and then recursive call for checking remaining args
-	template<typename TSandbox, typename Ret, typename First, typename... Rest, ENABLE_IF(decltype(sandbox_callback_all_args_are_tainted_helper<TSandbox>(std::declval<Ret (*)(Rest...)>()))::value)>
-	std::true_type sandbox_callback_all_args_are_tainted_helper(Ret(*) (tainted<First, TSandbox>, Rest...));
+	// //check if first arg is tainted and then recursive call for checking remaining args
+	// template<typename TSandbox, typename Ret, typename First, typename... Rest, ENABLE_IF(decltype(sandbox_callback_all_args_are_tainted_helper<TSandbox>(std::declval<Ret (*)(Rest...)>()))::value)>
+	// std::true_type sandbox_callback_all_args_are_tainted_helper(Ret(*) (tainted<First, TSandbox>, Rest...));
 
-	template <typename TSandbox, typename TFunc>
-	using sandbox_callback_all_args_are_tainted = decltype(sandbox_callback_all_args_are_tainted_helper(std::declval<TFunc>()));
+	// template <typename TSandbox, typename TFunc>
+	// using sandbox_callback_all_args_are_tainted = decltype(sandbox_callback_all_args_are_tainted_helper(std::declval<TFunc>()));
 
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	template<typename TSandbox, typename TArg>
+	std::true_type sandbox_callback_is_arg_tainted_helper(tainted<TArg ,TSandbox>);
 
-	// //base case
-	// template<typename Ret>
-	// std::true_type sandbox_function_have_all_args_fundamental_or_wrapped_helper(Ret(*) ());
+	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_v<TArg>)>
+	std::true_type sandbox_callback_is_arg_tainted_helper(TArg);
 
-	// template<typename Ret, typename First, typename... Rest, ENABLE_IF(my_is_fundamental_v<my_remove_reference_t<First>> && decltype(sandbox_function_have_all_args_fundamental_or_wrapped_helper(std::declval<Ret (*)(Rest...)>()))::value)>
-	// std::true_type sandbox_function_have_all_args_fundamental_or_wrapped_helper(Ret(*) (First, Rest...));
+	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_v<TArg>)>
+	std::false_type sandbox_callback_is_arg_tainted_helper(TArg);
 
-	// template<typename Ret, typename First, typename... Rest, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, my_remove_reference_t<First>> && decltype(sandbox_function_have_all_args_fundamental_or_wrapped_helper(std::declval<Ret (*)(Rest...)>()))::value)>
-	// std::true_type sandbox_function_have_all_args_fundamental_or_wrapped_helper(Ret(*) (First, Rest...));
+	template <typename TSandbox, typename TArg>
+	using sandbox_callback_is_arg_tainted = decltype(sandbox_callback_is_arg_tainted_helper(std::declval<TArg>()));
 
-	// template <typename TFunc>
-	// using sandbox_function_have_all_args_fundamental_or_wrapped = decltype(sandbox_function_have_all_args_fundamental_or_wrapped_helper(std::declval<TFunc>()));
+	template <typename TSandbox, typename... TArgs>
+	using sandbox_callback_all_args_are_tainted = and_<sandbox_callback_is_arg_tainted<TSandbox, TArgs>::value...>;
 
-	template <typename TFunc>
-	using sandbox_function_have_all_args_fundamental_or_wrapped =std::true_type;
+	template <typename... Args>
+	using sandbox_function_have_all_args_fundamental_or_wrapped = and_<(my_is_base_of_v<sandbox_wrapper_base, my_remove_reference_t<Args>> || my_is_fundamental_v<Args>)...>;
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1155,16 +1161,10 @@ namespace rlbox
 			return this->impl_GetUnsandboxedPointer(p);
 		}
 
-		template<typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
-		void freeInSandbox(T* val)
-		{
-			return this->impl_freeInSandbox(val);
-		}
-
 		template <typename T, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, T>)>
 		void freeInSandbox(T val)
 		{
-			return this->impl_freeInSandbox(val->UNSAFE_Unverified());
+			return this->impl_freeInSandbox(val.UNSAFE_Sandboxed(this));
 		}
 
 		bool isPointerInSandboxMemoryOrNull(const void* p)
@@ -1177,33 +1177,33 @@ namespace rlbox
 			return this->impl_isPointerInAppMemoryOrNull(p);
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<void(*)(TArgs...)>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		void invokeStatic(T* fnPtr, TArgs&&... params)
 		{
 			fnPtr(sandbox_removeWrapper(this, params)...);
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<void(*)(TArgs...)>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeStatic(T* fnPtr, TArgs&&... params)
 		{
 			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>(this, fnPtr(sandbox_removeWrapper(this, params)...));
 			return ret;
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<void(*)(TArgs...)>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		void invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
 			this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(this, params)...);
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<void(*)(TArgs...)>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
 			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>(this, this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(this, params)...));
 			return ret;
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<void(*)(TArgs...)>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		return_argument<T> invokeWithFunctionPointerReturnAppPtr(T* fnPtr, TArgs&&... params)
 		{
 			auto ret = this->impl_InvokeFunctionReturnAppPtr(fnPtr, sandbox_removeWrapper(this, params)...);
@@ -1278,7 +1278,7 @@ namespace rlbox
 			return heaparr(str, strlen(str) + 1);
 		}
 
-		template <typename TRet, typename... TArgs, ENABLE_IF(sandbox_callback_all_args_are_tainted<TSandbox, TRet(*)(TArgs...)>::value)>
+		template <typename TRet, typename... TArgs, ENABLE_IF(sandbox_callback_all_args_are_tainted<TSandbox, TArgs...>::value)>
 		__attribute__ ((noinline))
 		sandbox_callback_helper<TRet(sandbox_removeWrapper_t<TArgs>...), TSandbox> createCallback(TRet(*fnPtr)(RLBoxSandbox<TSandbox>*, TArgs...))
 		{
