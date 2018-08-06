@@ -420,15 +420,15 @@ int main(int argc, char const *argv[])
 	testerDynLib.runTests();
 	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
 
-	// printf("Testing NaCl\n");
-	// SandboxTests<RLBox_NaCl> testerNaCl;
-	// testerNaCl.init(
-	// #if defined(_M_IX86) || defined(__i386__)
-	// "../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
-	// #else
-	// "../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
-	// #endif
-	// , "./libtest.nexe");
-	// testerNaCl.runTests();
+	printf("Testing NaCl\n");
+	SandboxTests<RLBox_NaCl> testerNaCl;
+	testerNaCl.init(
+	#if defined(_M_IX86) || defined(__i386__)
+	"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
+	#else
+	"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
+	#endif
+	, "./libtest.nexe");
+	testerNaCl.runTests();
 	return 0;
 }

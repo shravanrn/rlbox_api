@@ -78,6 +78,8 @@ public:
 	{
 		return malloc(size);
 	}
+
+	//parameter val is a sandboxed pointer
 	inline void impl_freeInSandbox(void* val)
 	{
 		free(val);
@@ -121,6 +123,11 @@ public:
 	inline void* impl_KeepAddressInSandboxedRange(void* p)
 	{
 		return p;
+	}
+
+	inline bool impl_isValidSandboxedPointer(const void* p)
+	{
+		return true;
 	}
 
 	inline bool impl_isPointerInSandboxMemoryOrNull(const void* p)

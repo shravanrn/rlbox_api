@@ -173,6 +173,23 @@ private:
 		return sizeof(arg) + sandbox_NaClAddParams(rem...);
 	}
 
+	template <typename T, ENABLE_IF(std::is_class<T>::value)>
+	inline size_t sandbox_NaClAddReturnArg()
+	{
+		//pushing return argument slot on stack
+		#if defined(_M_IX86) || defined(__i386__) || defined(_M_X64) || defined(__x86_64__)
+			return sizeof(T) + sizeof(T*);
+		#else
+			#error Unknown platform!
+		#endif
+	}
+
+	template <typename T, ENABLE_IF(!std::is_class<T>::value)>
+	size_t sandbox_NaClAddReturnArg()
+	{
+		return 0;
+	}
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <typename T, ENABLE_IF(!std::is_floating_point<T>::value)>
@@ -191,12 +208,19 @@ private:
 
 	template <typename T>
 	inline typename std::enable_if<std::is_class<T>::value,
-	void>::type sandbox_dealWithNaClReturnArg(NaClSandbox_Thread* threadData)
+	void*>::type sandbox_dealWithNaClReturnArg(NaClSandbox_Thread* threadData)
 	{
 		//pushing return argument slot on stack
-		#if defined(_M_IX86) || defined(__i386__) || defined(_M_X64) || defined(__x86_64__)
+		#if defined(_M_IX86) || defined(__i386__)
+			uintptr_t target = threadData->stack_ptr_forParameters + sizeof(void*);
+			sandbox_handleNaClArg(threadData, impl_GetSandboxedPointer((void*)target));
 			ALLOCATE_STACK_VARIABLE(threadData, T, tPtr);
-			sandbox_handleNaClArg(threadData, tPtr);		
+			RLBox_NaCl_detail::UNUSED{tPtr};
+			return (void*) target;
+		#elif defined(_M_X64) || defined(__x86_64__)
+			ALLOCATE_STACK_VARIABLE(threadData, T, tPtr);
+			sandbox_handleNaClArg(threadData, impl_GetSandboxedPointer(tPtr));
+			return tPtr;
 		#else
 			#error Unknown platform!
 		#endif
@@ -204,9 +228,10 @@ private:
 
 	template <typename T>
 	inline typename std::enable_if<!std::is_class<T>::value,
-	void>::type sandbox_dealWithNaClReturnArg(NaClSandbox_Thread* threadData)
+	void*>::type sandbox_dealWithNaClReturnArg(NaClSandbox_Thread* threadData)
 	{
 		RLBox_NaCl_detail::UNUSED{threadData};
+		return nullptr;
 	}
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -231,45 +256,58 @@ private:
 
 	template <typename T, typename ... Targs>
 	inline typename std::enable_if<std::is_void<RLBox_NaCl_detail::return_argument<T>>::value,
-	void>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData)
+	void>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
 		RLBox_NaCl_detail::UNUSED{threadData};
+		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
 	}
 
 	template <typename T, typename ... Targs>
 	inline typename std::enable_if<std::is_pointer<RLBox_NaCl_detail::return_argument<T>>::value,
-	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData)
+	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
+		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
 		return (RLBox_NaCl_detail::return_argument<T>)functionCallReturnPtr(threadData);
 	}
 
 	template <typename T, typename ... Targs>
 	inline typename std::enable_if<std::is_same<RLBox_NaCl_detail::return_argument<T>, float>::value,
-	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData)
+	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
+		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
 		return (RLBox_NaCl_detail::return_argument<T>)functionCallReturnFloat(threadData);
 	}
 
 	template <typename T, typename ... Targs>
 	inline typename std::enable_if<std::is_same<RLBox_NaCl_detail::return_argument<T>, double>::value,
-	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData)
+	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
+		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
 		return (RLBox_NaCl_detail::return_argument<T>)functionCallReturnDouble(threadData);
 	}
 
 	template <typename T, typename ... Targs>
 	inline typename std::enable_if<std::is_class<RLBox_NaCl_detail::return_argument<T>>::value && !std::is_reference<T>::value,
-	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData)
+	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
 		//structs are returned as a pointer
-		auto& ret = *((RLBox_NaCl_detail::return_argument<T>*)functionCallReturnPtr(threadData));
+		#if defined(_M_IX86) || defined(__i386__)
+			auto ptr = (RLBox_NaCl_detail::return_argument<T>*) returnPtrSlot;
+		#elif defined(_M_X64) || defined(__x86_64__)
+			RLBox_NaCl_detail::UNUSED{returnPtrSlot};
+			auto ptr = ((RLBox_NaCl_detail::return_argument<T>*)functionCallReturnPtr(threadData));
+		#else
+			#error Unknown platform!
+		#endif
+		auto& ret = *ptr;
 		return ret;
 	}
 
 	template <typename T, typename ... Targs>
 	inline typename std::enable_if<!std::is_pointer<RLBox_NaCl_detail::return_argument<T>>::value && !std::is_void<RLBox_NaCl_detail::return_argument<T>>::value && !std::is_floating_point<RLBox_NaCl_detail::return_argument<T>>::value && !std::is_class<RLBox_NaCl_detail::return_argument<T>>::value,
-	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData)
+	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
+		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
 		return (RLBox_NaCl_detail::return_argument<T>)functionCallReturnRawPrimitiveInt(threadData);
 	}
 
@@ -294,6 +332,8 @@ public:
 	{
 		return mallocInSandbox(sandbox, size);
 	}
+
+	//parameter val is a sandboxed pointer
 	inline void impl_freeInSandbox(void* val)
 	{
 		freeInSandbox(sandbox, val);
@@ -400,6 +440,21 @@ public:
 		#endif
 	}
 
+	inline bool impl_isValidSandboxedPointer(const void* p)
+	{
+		#if defined(_M_IX86) || defined(__i386__)
+			uintptr_t max = 1;
+			max = max << 30;
+			return ((uintptr_t)p) < max;
+		#elif defined(_M_X64) || defined(__x86_64__)
+			uintptr_t max = 1;
+			max = max << 32;
+			return impl_isPointerInSandboxMemoryOrNull(p) || ((uintptr_t)p) < max;
+		#else
+			#error Unsupported platform!
+		#endif
+	}
+
 	inline bool impl_isPointerInSandboxMemoryOrNull(const void* p)
 	{
 		return isAddressInSandboxMemoryOrNull(sandbox, (uintptr_t) p);
@@ -454,17 +509,17 @@ public:
 	template <typename T, typename ... TArgs>
 	RLBox_NaCl_detail::return_argument<T> impl_InvokeFunction(T* fnPtr, TArgs... params)
 	{
-		NaClSandbox_Thread* threadData = preFunctionCall(sandbox, sandbox_NaClAddParams(params...), 0 /* size of any arrays being pushed on the stack */);
-		sandbox_dealWithNaClReturnArg<RLBox_NaCl_detail::return_argument<T>>(threadData);
+		NaClSandbox_Thread* threadData = preFunctionCall(sandbox, sandbox_NaClAddParams(params...) + sandbox_NaClAddReturnArg<RLBox_NaCl_detail::return_argument<T>>(), 0 /* size of any arrays being pushed on the stack */);
+		auto returnPtrSlot = sandbox_dealWithNaClReturnArg<RLBox_NaCl_detail::return_argument<T>>(threadData);
 		sandbox_dealWithNaClArgs(threadData, fnPtr, params...);
 		invokeFunctionCall(threadData, (void*)(uintptr_t) fnPtr);
-		return sandbox_invokeNaClReturn<T>(threadData);
+		return sandbox_invokeNaClReturn<T>(threadData, returnPtrSlot);
 	}
 
 	template <typename T, typename ... TArgs>
 	RLBox_NaCl_detail::return_argument<T> impl_InvokeFunctionReturnAppPtr(T* fnPtr, TArgs... params)
 	{
-		NaClSandbox_Thread* threadData = preFunctionCall(sandbox, sandbox_NaClAddParams(params...), 0 /* size of any arrays being pushed on the stack */);
+		NaClSandbox_Thread* threadData = preFunctionCall(sandbox, sandbox_NaClAddParams(params...) + sandbox_NaClAddReturnArg<RLBox_NaCl_detail::return_argument<T>>(), 0 /* size of any arrays being pushed on the stack */);
 		sandbox_dealWithNaClReturnArg<RLBox_NaCl_detail::return_argument<T>>(threadData);
 		sandbox_dealWithNaClArgs(threadData, fnPtr, params...);
 		invokeFunctionCall(threadData, (void*)(uintptr_t) fnPtr);

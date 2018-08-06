@@ -400,7 +400,9 @@ namespace rlbox
 		tainted<T, TSandbox> structCopy;
 		memcpy(&structCopy, &retRaw, sizeof(T));
 		//Structs may have fields which are pointers, each of these have to unswizzled
-		structCopy.unsandboxPointers(sandbox);
+		//However, these may not be valid pointers as the library may leave garbage in some struct fields
+		//for these fields, we set these to null
+		structCopy.unsandboxPointersOrNull(sandbox);
 		return structCopy;
 	}
 
@@ -524,14 +526,21 @@ namespace rlbox
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
-		inline void unsandboxPointers(RLBoxSandbox<TSandbox>* sandbox)
+		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline void unsandboxPointers(RLBoxSandbox<TSandbox>* sandbox)
+		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
-			field = (T) sandbox->getUnsandboxedPointer((void*)field);
+			if(sandbox->isValidSandboxedPointer((const void*)field))
+			{
+				field = (T) sandbox->getUnsandboxedPointer((void*)field);
+			}
+			else
+			{
+				field = nullptr;
+			}
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
@@ -983,7 +992,7 @@ namespace rlbox
 	#define helper_fieldInit(fieldType, fieldName, TSandbox) fieldName = p.fieldName;
 	#define helper_fieldCopy(fieldType, fieldName, TSandbox) { tainted<fieldType, TSandbox> temp = fieldName; memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
 	#define helper_fieldCopyUnsandbox(fieldType, fieldName, TSandbox) { auto temp = fieldName.UNSAFE_Sandboxed(sandbox); memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
-	#define helper_fieldUnsandbox(fieldType, fieldName, TSandbox) fieldName.unsandboxPointers(sandbox);
+	#define helper_fieldUnsandbox(fieldType, fieldName, TSandbox) fieldName.unsandboxPointersOrNull(sandbox);
 
 	#define tainted_data_specialization(T, libId, TSandbox) \
 	template<> \
@@ -1054,7 +1063,7 @@ namespace rlbox
 			return *this; \
 		} \
 		\
-		inline void unsandboxPointers(RLBoxSandbox<TSandbox>* sandbox) \
+		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox) \
 		{ \
 			sandbox_fields_reflection_##libId##_class_##T(helper_fieldUnsandbox, helper_noOp, TSandbox)\
 		} \
@@ -1159,12 +1168,12 @@ namespace rlbox
 			return ret;
 		}
 
-		void* getSandboxedPointer(void* p)
+		inline void* getSandboxedPointer(void* p)
 		{
 			return this->impl_GetSandboxedPointer(p);
 		}
 
-		void* getUnsandboxedPointer(void* p)
+		inline void* getUnsandboxedPointer(void* p)
 		{
 			return this->impl_GetUnsandboxedPointer(p);
 		}
@@ -1172,15 +1181,20 @@ namespace rlbox
 		template <typename T, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, T>)>
 		void freeInSandbox(T val)
 		{
-			return this->impl_freeInSandbox(val.UNSAFE_Sandboxed(this));
+			return this->impl_freeInSandbox(val.UNSAFE_Unverified());
 		}
 
-		bool isPointerInSandboxMemoryOrNull(const void* p)
+		inline bool isValidSandboxedPointer(const void* p)
+		{
+			return this->impl_isValidSandboxedPointer(p);
+		}
+
+		inline bool isPointerInSandboxMemoryOrNull(const void* p)
 		{
 			return this->impl_isPointerInSandboxMemoryOrNull(p);
 		}
 
-		bool isPointerInAppMemoryOrNull(const void* p)
+		inline bool isPointerInAppMemoryOrNull(const void* p)
 		{
 			return this->impl_isPointerInAppMemoryOrNull(p);
 		}
