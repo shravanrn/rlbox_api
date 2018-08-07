@@ -513,6 +513,16 @@ namespace rlbox
 			return field;
 		}
 
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline my_decay_if_array_t<T> UNSAFE_Unverified_Check_Range(RLBoxSandbox<TSandbox>* sandbox, size_t size) const noexcept
+		{
+			uintptr_t fieldVal = (uintptr_t) UNSAFE_Unverified();
+			if(fieldVal < (fieldVal + size) && sandbox->isPointerInSandboxMemoryOrNull((void*)(fieldVal + size))){
+				return (my_decay_if_array_t<T>)fieldVal;
+			}
+			return nullptr;
+		}
+
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
 		{
@@ -779,6 +789,16 @@ namespace rlbox
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
 			return getAppSwizzledValue(field, (void*) &field /* exampleUnsandboxedPtr */);
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline my_decay_if_array_t<T> UNSAFE_Unverified_Check_Range(RLBoxSandbox<TSandbox>* sandbox, size_t size) const noexcept
+		{
+			uintptr_t fieldVal = (uintptr_t) UNSAFE_Unverified();
+			if(fieldVal < (fieldVal + size) && sandbox->isPointerInSandboxMemoryOrNull((void*)(fieldVal + size))){
+				return (my_decay_if_array_t<T>)fieldVal;
+			}
+			return nullptr;
 		}
 
 		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
