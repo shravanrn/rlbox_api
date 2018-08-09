@@ -4,6 +4,7 @@
 #include <utility>
 #include <stdint.h>
 #include <mutex>
+#include <limits>
 
 namespace RLBox_DynLib_detail {
 	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
@@ -74,6 +75,7 @@ public:
 			exit(1);
 		}
 	}
+
 	inline void* impl_mallocInSandbox(size_t size)
 	{
 		return malloc(size);
@@ -84,11 +86,23 @@ public:
 	{
 		free(val);
 	}
+
+	inline size_t impl_getTotalMemory()
+	{
+		return std::numeric_limits<size_t>::max();
+	}
+
+	inline char* impl_getMaxPointer()
+	{
+		return (char*)(uintptr_t)0xFFFFFFFF;
+	}
+
 	inline void* impl_pushStackArr(size_t size)
 	{
 		pushPopCount++;
 		return malloc(size);
 	}
+
 	inline void impl_popStackArr(void* ptr, size_t size)
 	{
 		pushPopCount--;

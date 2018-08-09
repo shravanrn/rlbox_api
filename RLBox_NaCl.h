@@ -328,6 +328,7 @@ public:
 			sandboxList.push_back(sandbox);
 		#endif
 	}
+
 	inline void* impl_mallocInSandbox(size_t size)
 	{
 		return mallocInSandbox(sandbox, size);
@@ -338,6 +339,31 @@ public:
 	{
 		freeInSandbox(sandbox, val);
 	}
+
+	inline size_t impl_getTotalMemory()
+	{
+		#if defined(_M_IX86) || defined(__i386__)
+			size_t memSize = 0x3FFFFFFF;
+		#elif defined(_M_X64) || defined(__x86_64__)
+			size_t memSize = 0xFFFFFFFF;
+		#else
+			#error Unsupported platform!
+		#endif
+		return memSize;
+	}
+
+	inline char* impl_getMaxPointer()
+	{
+		#if defined(_M_IX86) || defined(__i386__)
+			uintptr_t sboxMem = 0x3FFFFFFF;
+		#elif defined(_M_X64) || defined(__x86_64__)
+			uintptr_t sboxMem = 0xFFFFFFFF;
+		#else
+			#error Unsupported platform!
+		#endif
+		return (char*)impl_GetUnsandboxedPointer((void*)sboxMem);
+	}
+
 	inline void* impl_pushStackArr(size_t size)
 	{
 		// NaClSandbox_Thread* threadData = getThreadData(sandbox);

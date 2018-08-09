@@ -374,6 +374,14 @@ public:
 			strcmp(result.fieldFixedArr, "Bye") == 0);
 	}
 
+	void testBadRangePointer()
+	{
+		tainted<char*, TSandbox> maxPtr = sandbox->getMaxPointer();
+
+		auto result = maxPtr.UNSAFE_Unverified_Check_Range(sandbox, 32);
+		ENSURE(result != nullptr);
+	}
+
 	void init(const char* runtimePath, const char* libraryPath)
 	{
 		sandbox = RLBoxSandbox<TSandbox>::createSandbox(runtimePath, libraryPath);
@@ -409,6 +417,7 @@ public:
 	{
 		testStructWithBadPtr();
 		testStructPtrWithBadPtr();
+		testBadRangePointer();
 	}
 };
 

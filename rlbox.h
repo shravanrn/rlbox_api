@@ -1188,6 +1188,24 @@ namespace rlbox
 			return ret;
 		}
 
+		template <typename T, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, T>)>
+		void freeInSandbox(T val)
+		{
+			return this->impl_freeInSandbox(val.UNSAFE_Unverified());
+		}
+
+		inline size_t getTotalMemory()
+		{
+			return this->impl_getTotalMemory();
+		}
+
+		inline tainted<char*, TSandbox> getMaxPointer()
+		{
+			tainted<char*, TSandbox> ret;
+			ret.field = this->impl_getMaxPointer();
+			return ret;
+		}
+
 		inline void* getSandboxedPointer(void* p)
 		{
 			return this->impl_GetSandboxedPointer(p);
@@ -1196,12 +1214,6 @@ namespace rlbox
 		inline void* getUnsandboxedPointer(void* p)
 		{
 			return this->impl_GetUnsandboxedPointer(p);
-		}
-
-		template <typename T, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, T>)>
-		void freeInSandbox(T val)
-		{
-			return this->impl_freeInSandbox(val.UNSAFE_Unverified());
 		}
 
 		inline bool isValidSandboxedPointer(const void* p)
