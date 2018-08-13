@@ -10,6 +10,10 @@
 	f(int (*)(unsigned, const char*, unsigned[1]), fieldFnPtr, ##__VA_ARGS__) \
 	g() \
 	f(struct unknownClass*, fieldUnknownPtr, ##__VA_ARGS__) \
+	g() \
+	f(void*, voidPtr, ##__VA_ARGS__) \
+	g() \
+	f(int (*[4])(unsigned, const char*, unsigned[1]), fnArray, ##__VA_ARGS__) \
 	g()
 
 #define sandbox_fields_reflection_testlib_allClasses(f, ...) \

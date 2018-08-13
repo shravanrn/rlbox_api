@@ -95,6 +95,9 @@ namespace rlbox
 	constexpr bool my_is_one_level_ptr_v = my_is_pointer_v<T> && !my_is_pointer_v<my_remove_pointer_t<T>>;
 
 	template<typename T>
+	constexpr bool my_is_void_ptr_v = my_is_pointer_v<T> && my_is_void_v<my_remove_pointer_t<T>>;
+
+	template<typename T>
 	using my_decay_noconst_if_array_t = my_conditional_t<my_is_array_v<T>, my_decay_t<T>, T>;
 
 	template<typename T>
@@ -104,10 +107,14 @@ namespace rlbox
 	using valid_return_t = my_decay_noconst_if_array_t<T>;
 
 	template<typename T>
-	using my_remove_pointer_or_valid_return_t = my_conditional_t<my_is_function_v<my_remove_pointer_t<T>> || my_is_array_v<T>, my_decay_if_array_t<T>, my_remove_pointer_t<T>>;
+	using my_remove_pointer_or_valid_return_t = my_conditional_t<my_is_function_v<my_remove_pointer_t<T>> || my_is_array_v<my_remove_pointer_t<T>> || my_is_array_v<T>, my_decay_if_array_t<T>, my_remove_pointer_t<T>>;
+
+	template<typename T>
+	using my_remove_pointer_or_valid_param_t = my_conditional_t<my_is_void_ptr_v<T>, T, my_remove_pointer_t<T>>;
 
 	template<typename T>
 	constexpr bool my_is_function_ptr_v = my_is_pointer_v<T> && my_is_function_v<my_remove_pointer_t<T>>;
+
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -320,6 +327,13 @@ namespace rlbox
 		sandbox_callback_state<TSandbox>* stateObject;
 	public:
 
+		sandbox_callback_helper()
+		{
+			this->sandbox = nullptr;
+			this->registeredCallback = nullptr;
+			this->stateObject = nullptr;
+		}
+
 		sandbox_callback_helper(TSandbox* sandbox, T* registeredCallback, sandbox_callback_state<TSandbox>* stateObject)
 		{
 			this->sandbox = sandbox;
@@ -336,7 +350,7 @@ namespace rlbox
 			other.stateObject = nullptr;
 		}
 
-		sandbox_callback_helper& operator=(const sandbox_callback_helper&& other)  
+		sandbox_callback_helper& operator=(sandbox_callback_helper&& other)  
 		{
 			if (this != &other)  
 			{
@@ -347,6 +361,7 @@ namespace rlbox
 				other.sandbox = nullptr;
 				other.stateObject = nullptr;
 			}
+			return *this;
 		}
 
 		~sandbox_callback_helper()
@@ -492,7 +507,7 @@ namespace rlbox
 		{
 			for(unsigned long i = 0; i < sizeof(field)/sizeof(void*); i++)
 			{
-				field[i] = p.field[i].UNSAFE_Unverified();
+				field[i] = p[i].UNSAFE_Unverified();
 			}
 		}
 
@@ -551,6 +566,16 @@ namespace rlbox
 			{
 				field = nullptr;
 			}
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		void assignPointerInSandbox(RLBoxSandbox<TSandbox>* sandbox, T pointerVal)
+		{
+			if(!sandbox->isPointerInSandboxMemoryOrNull(pointerVal))
+			{
+				abort();
+			}
+			field = pointerVal;
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
@@ -702,6 +727,12 @@ namespace rlbox
 			return field != arg;
 		}
 
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline bool operator!() const
+		{
+			return field != nullptr;
+		}
+
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
 			tainted<T, TSandbox> result = - UNSAFE_Unverified();
@@ -761,13 +792,13 @@ namespace rlbox
 		tainted_volatile(const tainted_volatile<T, TSandbox>& p) = default;
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
-		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
+		inline my_decay_if_array_t<T> getAppSwizzledValue(my_add_volatile_t<T> arg, void* exampleUnsandboxedPtr) const
 		{
-			return arg;
+			return (my_decay_if_array_t<T>) arg;
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline my_decay_if_array_t<T> getAppSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
+		inline my_decay_if_array_t<T> getAppSwizzledValue(my_add_volatile_t<T> arg, void* exampleUnsandboxedPtr) const
 		{
 			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg, exampleUnsandboxedPtr);
 		}
@@ -785,10 +816,11 @@ namespace rlbox
 		}
 	public:
 
-		template<typename T2=T, ENABLE_IF(!my_is_array_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
-			return getAppSwizzledValue(field, (void*) &field /* exampleUnsandboxedPtr */);
+			//Have to cast to the correct type as function pointer arrays have some const problems otherwise
+			auto fieldCopy = (my_add_volatile_t<T>*) &field;
+			return getAppSwizzledValue(*fieldCopy, (void*) &field /* exampleUnsandboxedPtr */);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
@@ -806,6 +838,16 @@ namespace rlbox
 			return field;
 		}
 
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		void assignPointerInSandbox(RLBoxSandbox<TSandbox>* sandbox, T pointerVal)
+		{
+			if(!sandbox->isPointerInSandboxMemoryOrNull(pointerVal))
+			{
+				abort();
+			}
+			field = (T) sandbox->getSandboxedPointer((void*) pointerVal);
+		}
+
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
 		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
@@ -819,8 +861,8 @@ namespace rlbox
 		}
 
 		//Non class pointers - one level pointers
-		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
-		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<RLBox_Verify_Status(my_remove_pointer_t<T>)> verifyFunction, my_remove_pointer_t<T> defaultValue) const
+		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>> && !my_is_void_ptr_v<T2>)>
+		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<RLBox_Verify_Status(my_remove_pointer_or_valid_param_t<T>)> verifyFunction, my_remove_pointer_or_valid_param_t<T> defaultValue) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			if(maskedFieldPtr == nullptr)
@@ -999,7 +1041,7 @@ namespace rlbox
 			{
 				abort();
 			}
-			my_remove_extent_t<T>* locPtr = &(maskedFieldPtr[x]);
+			my_remove_extent_t<T>* locPtr = (my_remove_extent_t<T>*) &(maskedFieldPtr[x]);
 			return *((tainted_volatile<my_remove_extent_t<T>, TSandbox> *) locPtr);
 		}
 	};
@@ -1102,7 +1144,7 @@ namespace rlbox
 	}
 
 	template<typename TSandbox, typename TRHS, typename... TRHSRem, template<typename, typename...> class TWrap, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
-	inline auto sandbox_removeWrapper(RLBoxSandbox<TSandbox>* sandbox, TWrap<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_Sandboxed(sandbox))
+	inline auto sandbox_removeWrapper(RLBoxSandbox<TSandbox>* sandbox, const TWrap<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_Sandboxed(sandbox))
 	{
 		return arg.UNSAFE_Sandboxed(sandbox);
 	}
@@ -1115,7 +1157,7 @@ namespace rlbox
 	}
 
 	template<typename TSandbox, typename TRHS, typename... TRHSRem, template<typename, typename...> class TWrap, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
-	inline auto sandbox_removeWrapperUnsandboxed(RLBoxSandbox<TSandbox>* sandbox, TWrap<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_Unverified())
+	inline auto sandbox_removeWrapperUnsandboxed(RLBoxSandbox<TSandbox>* sandbox, const TWrap<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_Unverified())
 	{
 		return arg.UNSAFE_Unverified();
 	}
@@ -1159,7 +1201,7 @@ namespace rlbox
 	using sandbox_callback_all_args_are_tainted = and_<sandbox_callback_is_arg_tainted<TSandbox, TArgs>::value...>;
 
 	template <typename... Args>
-	using sandbox_function_have_all_args_fundamental_or_wrapped = and_<(my_is_base_of_v<sandbox_wrapper_base, my_remove_reference_t<Args>> || my_is_fundamental_v<Args>)...>;
+	using sandbox_function_have_all_args_fundamental_or_wrapped = and_<(my_is_base_of_v<sandbox_wrapper_base, my_remove_reference_t<Args>> || my_is_fundamental_v<my_remove_reference_t<Args>>)...>;
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1346,10 +1388,17 @@ namespace rlbox
 
 	};
 
+	template<typename TLHS, typename TRHS, typename TSandbox, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>> && my_is_pointer_v<TLHS> && my_is_pointer_v<TRHS>)>
+	inline tainted<TLHS, TSandbox> sandbox_reinterpret_cast(const TWrap<TRHS, TSandbox> rhs) noexcept
+	{
+		auto ptr = &rhs;
+		auto pret = (tainted<TLHS, TSandbox>*) ptr;
+		return *pret;
+	}
+
 	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
 	#define sandbox_invoke_in_my_app(sandbox, fnName, ...) sandbox->invokeInMyApp(&fnName, ##__VA_ARGS__)
 	#define sandbox_invoke_return_app_ptr(sandbox, fnName, ...) sandbox->invokeWithFunctionPointerReturnAppPtr((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
-	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
 	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
 
 	#undef UNUSED

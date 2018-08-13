@@ -108,3 +108,9 @@ int* echoPointer(int* pointer)
 {
 	return pointer;
 }
+
+double simplePointerValAddTest(double* ptr, double val)
+{
+	printf("simplePointerValAddTest\n");
+	return val + *ptr;
+}

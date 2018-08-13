@@ -11,6 +11,8 @@ extern "C" {
         char fieldFixedArr[8];
         int (*fieldFnPtr)(unsigned, const char*, unsigned[1]);
         struct unknownClass* fieldUnknownPtr;
+        void* voidPtr;
+        CallbackType fnArray[4];
     };
 
     unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b);
@@ -27,4 +29,5 @@ extern "C" {
     struct testStruct simpleTestStructValBadPtr();
     struct testStruct* simpleTestStructPtrBadPtr();
     int* echoPointer(int* pointer);
+    double simplePointerValAddTest(double* ptr, double val);
 }

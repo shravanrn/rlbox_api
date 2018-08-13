@@ -98,6 +98,12 @@ public:
 		tainted<int***, TSandbox> pc = sandbox->template mallocInSandbox<int**>();
 		*pc = 0;
 		pb = *pc;
+
+		tainted<void**, TSandbox> pv = sandbox->template mallocInSandbox<void*>();
+		*pv = nullptr;
+
+		tainted<testStruct*, TSandbox> ps = sandbox->template mallocInSandbox<testStruct>();
+		ps->voidPtr = nullptr;
 	}
 
 	void testPointerNullChecks()
@@ -264,6 +270,18 @@ public:
 		ENSURE(resultFD == 3.0);
 	}
 
+	void testPointerValAdd()
+	{
+		tainted<double*, TSandbox> pd = sandbox->template mallocInSandbox<double>();
+		*pd = 1.0;
+
+		double d = 2.0d;
+
+		auto resultD = sandbox_invoke(sandbox, simplePointerValAddTest, pd, d)
+			.copyAndVerify([](double val){ return val > 0 && val < 100? val : -1.0; });
+		ENSURE(resultD == 3.0);
+	}
+
 	void testStructures()
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructVal);
@@ -407,6 +425,7 @@ public:
 		testCallbackOnStruct();
 		testEchoAndPointerLocations();
 		testFloatingPoint();
+		testPointerValAdd();
 		testStructures();
 		testStructurePointers();
 		testStatefulLambdas();
