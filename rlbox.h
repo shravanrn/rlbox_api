@@ -730,7 +730,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline bool operator!() const
 		{
-			return field != nullptr;
+			return field == nullptr;
 		}
 
 		inline tainted<T, TSandbox> operator-() const noexcept
@@ -810,9 +810,9 @@ namespace rlbox
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleSandboxedPtr) const
+		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
-			return (T) TSandbox::impl_GetSandboxedPointer((void*) arg, exampleSandboxedPtr);
+			return (T) TSandbox::impl_GetSandboxedPointer((void*) arg, exampleUnsandboxedPtr);
 		}
 	public:
 
@@ -968,7 +968,7 @@ namespace rlbox
 		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted<TRHS, TSandbox>& arg) noexcept
 		{
-			field = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleSandboxedPtr */);
+			field = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
 			return *this;
 		}
 
@@ -1224,9 +1224,12 @@ namespace rlbox
 		tainted<T*, TSandbox> mallocInSandbox(unsigned int count=1)
 		{
 			void* addr = this->impl_mallocInSandbox(sizeof(T) * count);
-			void* rangeCheckedAddr = this->impl_KeepAddressInSandboxedRange(addr);
+			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr)))
+			{
+				abort();
+			}
 			tainted<T*, TSandbox> ret;
-			ret.field = (T*) rangeCheckedAddr;
+			ret.field = (T*) addr;
 			return ret;
 		}
 

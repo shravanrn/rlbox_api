@@ -321,7 +321,7 @@ public:
 		if(!sandbox)
 		{
 			printf("Failed to create sandbox for: %s\n", libraryPath);
-			exit(1);
+			abort();
 		}
 		sandbox->extraState = (void*) this;
 		#if defined(_M_IX86) || defined(__i386__)
@@ -399,7 +399,7 @@ public:
 				}
 			}
 			printf("Could not find sandbox for address: %p\n", p);
-			exit(1);
+			abort();
 		#elif defined(_M_X64) || defined(__x86_64__)
 			//32 bit mask
 			uintptr_t mask = ((uintptr_t)exampleUnsandboxedPtr) & 0xFFFFFFFF00000000;
@@ -411,7 +411,7 @@ public:
 		#endif
 	}
 
-	static inline void* impl_GetSandboxedPointer(void* p, void* exampleSandboxedPtr)
+	static inline void* impl_GetSandboxedPointer(void* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
 			for(NaClSandbox* sandbox : sandboxList)
@@ -425,10 +425,11 @@ public:
 				}
 			}
 			printf("Could not find sandbox for address: %p\n", p);
-			exit(1);
+			abort();
 		#else
-			//same code - just reuse
-			return impl_GetUnsandboxedPointer(p, exampleSandboxedPtr);
+			//32 bit mask
+			uintptr_t ret = ((uintptr_t)p) & 0xFFFFFFFF;
+			return (void*) ret;
 		#endif
 	}
 
@@ -442,28 +443,6 @@ public:
 	{
 		auto ret = (void*) getSandboxedAddress(sandbox, (uintptr_t)p);
 		return ret;
-	}
-
-	inline void* impl_KeepAddressInSandboxedRange(void* p)
-	{
-		#if defined(_M_IX86) || defined(__i386__)
-			size_t memSize = 0x3FFFFFFF;
-			uintptr_t base = getSandboxMemoryBase(sandbox);
-			uintptr_t pVal = (uintptr_t)p;
-			if(pVal >= base && pVal < (base + memSize))
-			{
-				return (void*) pVal;
-			}
-			return (void*) (base + (memSize/2));
-		#elif defined(_M_X64) || defined(__x86_64__)
-			//32 bit mask
-			uintptr_t mask = getSandboxMemoryBase(sandbox);
-			uintptr_t suffix = ((uintptr_t)p) & 0xFFFFFFFF;
-			uintptr_t ret = mask | suffix;
-			return (void*) ret;
-		#else
-			#error Unsupported platform!
-		#endif
 	}
 
 	inline bool impl_isValidSandboxedPointer(const void* p)
@@ -527,7 +506,7 @@ public:
 		if(!ret)
 		{
 			printf("Symbol not found: %s.", name);
-			exit(1);
+			abort();
 		}
 		return ret;
 	}

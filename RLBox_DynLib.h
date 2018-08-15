@@ -119,7 +119,7 @@ public:
 		return p;
 	}
 	
-	static inline void* impl_GetSandboxedPointer(void* p, void* exampleSandboxedPtr)
+	static inline void* impl_GetSandboxedPointer(void* p, void* exampleUnsandboxedPtr)
 	{
 		return p;
 	}
@@ -130,11 +130,6 @@ public:
 	}
 	
 	inline void* impl_GetSandboxedPointer(void* p)
-	{
-		return p;
-	}
-
-	inline void* impl_KeepAddressInSandboxedRange(void* p)
 	{
 		return p;
 	}

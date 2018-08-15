@@ -363,13 +363,13 @@ public:
 			.copyAndVerify([this](tainted<testStruct, TSandbox>& val){ 
 				testStruct ret;
 				ret.fieldLong = val.fieldLong.copyAndVerify([](unsigned long val) { return val; });
-				ret.fieldString = val.fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+				ret.fieldString = val.fieldString.UNSAFE_Unverified();
 				ret.fieldBool = val.fieldBool.copyAndVerify([](unsigned int val) { return val; });
 				val.fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
 				return ret; 
 			});
 		ENSURE(result.fieldLong == 7 && 
-			strcmp(result.fieldString, "Hello") == 0 &&
+			result.fieldString == 0 &&
 			result.fieldBool == 1 &&
 			strcmp(result.fieldFixedArr, "Bye") == 0);
 	}
@@ -377,17 +377,18 @@ public:
 	void testStructPtrWithBadPtr()
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructPtrBadPtr);
+		resultT->fieldString = nullptr;
 		auto result = resultT
 			.copyAndVerify([this](tainted<testStruct, TSandbox>* val) { 
 				testStruct ret;
 				ret.fieldLong = val->fieldLong.copyAndVerify([](unsigned long val) { return val; });
-				ret.fieldString = val->fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+				ret.fieldString = nullptr;
 				ret.fieldBool = val->fieldBool.copyAndVerify([](unsigned int val) { return val; });
 				val->fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
 				return ret; 
 			});
 		ENSURE(result.fieldLong == 7 && 
-			strcmp(result.fieldString, "Hello") == 0 &&
+			result.fieldString == 0 &&
 			result.fieldBool == 1 &&
 			strcmp(result.fieldFixedArr, "Bye") == 0);
 	}
@@ -397,7 +398,7 @@ public:
 		tainted<char*, TSandbox> maxPtr = sandbox->getMaxPointer();
 
 		auto result = maxPtr.UNSAFE_Unverified_Check_Range(sandbox, 32);
-		ENSURE(result != nullptr);
+		ENSURE(result == nullptr);
 	}
 
 	void init(const char* runtimePath, const char* libraryPath)
@@ -458,5 +459,6 @@ int main(int argc, char const *argv[])
 	#endif
 	, "./libtest.nexe");
 	testerNaCl.runTests();
+	testerNaCl.runBadPointersTest();
 	return 0;
 }
