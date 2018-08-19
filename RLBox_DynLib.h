@@ -198,4 +198,7 @@ public:
 	}
 };
 
+__attribute__((weak))
+thread_local RLBox_DynLib* RLBox_DynLib::dynLib_SavedState = nullptr;
+
 #undef ENABLE_IF
