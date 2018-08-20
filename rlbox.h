@@ -1277,19 +1277,6 @@ namespace rlbox
 		}
 
 		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
-		void invokeInMyApp(T* fnPtr, TArgs&&... params)
-		{
-			fnPtr(sandbox_removeWrapperUnsandboxed(this, params)...);
-		}
-
-		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
-		tainted<return_argument<T>, TSandbox> invokeInMyApp(T* fnPtr, TArgs&&... params)
-		{
-			tainted<return_argument<T>, TSandbox> ret = sandbox_convertToUnverified<return_argument<T>>(this, fnPtr(sandbox_removeWrapperUnsandboxed(this, params)...));
-			return ret;
-		}
-
-		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		void invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
 			this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(this, params)...);
@@ -1400,7 +1387,6 @@ namespace rlbox
 	}
 
 	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
-	#define sandbox_invoke_in_my_app(sandbox, fnName, ...) sandbox->invokeInMyApp(&fnName, ##__VA_ARGS__)
 	#define sandbox_invoke_return_app_ptr(sandbox, fnName, ...) sandbox->invokeWithFunctionPointerReturnAppPtr((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
 	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
 

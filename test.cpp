@@ -4,6 +4,7 @@
 #include <iostream>
 #include <limits>
 #include "libtest.h"
+#include "RLBox_MyApp.h"
 #include "RLBox_DynLib.h"
 #include "RLBox_NaCl.h"
 #include "testlib_structs_for_cpp_api.h"
@@ -28,6 +29,7 @@ void printTypes()
 
 //////////////////////////////////////////////////////////////////
 
+rlbox_load_library_api(testlib, RLBox_MyApp)
 rlbox_load_library_api(testlib, RLBox_DynLib)
 rlbox_load_library_api(testlib, RLBox_NaCl)
 
@@ -143,9 +145,6 @@ public:
 	void testFunctionInvocation()
 	{
 		tainted<int, TSandbox> a = 20;
-		auto ret = sandbox_invoke_in_my_app(sandbox, simpleAddTest, a, 22);
-		ENSURE(ret.UNSAFE_Unverified() == 42);
-
 		auto ret2 = sandbox_invoke(sandbox, simpleAddTest, a, 22);
 		ENSURE(ret2.UNSAFE_Unverified() == 42);
 	}
@@ -413,11 +412,11 @@ public:
 		testBinaryOperators();
 		testDerefOperators();
 		testPointerAssignments();
-		testPointerNullChecks();
 		testVolatileDerefOperator();
 		testAddressOfOperators();
 		testAppPointer();
 		testFunctionInvocation();
+		testPointerNullChecks();
 		test64BitReturns();
 		testTwoVerificationFunctionFormats();
 		testPointerVerificationFunctionFormats();
@@ -443,6 +442,12 @@ public:
 
 int main(int argc, char const *argv[])
 {
+	printf("Testing calls within my app\n");
+	SandboxTests<RLBox_MyApp> testerMyApp;
+	testerMyApp.init("", "");
+	testerMyApp.runTests();
+	//the RLBox_MyApp doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+
 	printf("Testing dyn lib\n");
 	SandboxTests<RLBox_DynLib> testerDynLib;
 	testerDynLib.init("", "./libtest.so");

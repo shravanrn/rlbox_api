@@ -6,7 +6,7 @@
 #include <mutex>
 #include <limits>
 
-namespace RLBox_DynLib_detail {
+namespace RLBox_MyApp_detail {
 	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
 	template<typename Ret, typename... Rest>
 	Ret return_argument_helper(Ret(*) (Rest...));
@@ -26,10 +26,10 @@ namespace RLBox_DynLib_detail {
 
 #define ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
 
-class RLBox_DynLib
+class RLBox_MyApp
 {
 private:
-	static thread_local RLBox_DynLib* dynLib_SavedState;
+	static thread_local RLBox_MyApp* dynLib_SavedState;
 	std::mutex callbackMutex;
 	static const unsigned int CALLBACK_SLOT_COUNT = 32;
 	void* allowedFunctions[CALLBACK_SLOT_COUNT];
@@ -68,10 +68,11 @@ private:
 public:
 	inline void impl_CreateSandbox(const char* sandboxRuntimePath, const char* libraryPath)
 	{
-		libHandle = dlopen(libraryPath, RTLD_LAZY);
+		//dlopen with null pointer points to the current app
+		libHandle = dlopen(nullptr, RTLD_LAZY);
 		if(!libHandle)
 		{
-			printf("Library Load Failed: %s\n", libraryPath);
+			printf("Could not open symbol table of my app\n");
 			abort();
 		}
 	}
@@ -108,7 +109,7 @@ public:
 		pushPopCount--;
 		if(pushPopCount < 0)
 		{
-			printf("Error - RLBox_DynLib popCount was negative.\n");
+			printf("Error - RLBox_MyApp popCount was negative.\n");
 			abort();
 		}
 		return free(ptr);
@@ -185,20 +186,20 @@ public:
 	}
 
 	template <typename T, typename ... TArgs>
-	RLBox_DynLib_detail::return_argument<T> impl_InvokeFunction(T* fnPtr, TArgs... params)
+	RLBox_MyApp_detail::return_argument<T> impl_InvokeFunction(T* fnPtr, TArgs... params)
 	{
 		dynLib_SavedState = this;
 		return (*fnPtr)(params...);
 	}
 
 	template <typename T, typename ... TArgs>
-	RLBox_DynLib_detail::return_argument<T> impl_InvokeFunctionReturnAppPtr(T* fnPtr, TArgs... params)
+	RLBox_MyApp_detail::return_argument<T> impl_InvokeFunctionReturnAppPtr(T* fnPtr, TArgs... params)
 	{
 		return impl_InvokeFunction(fnPtr, params...);
 	}
 };
 
 __attribute__((weak))
-thread_local RLBox_DynLib* RLBox_DynLib::dynLib_SavedState = nullptr;
+thread_local RLBox_MyApp* RLBox_MyApp::dynLib_SavedState = nullptr;
 
 #undef ENABLE_IF

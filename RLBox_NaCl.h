@@ -505,7 +505,7 @@ public:
 		auto ret = symbolTableLookupInSandbox(sandbox, name);
 		if(!ret)
 		{
-			printf("Symbol not found: %s.", name);
+			printf("Symbol not found: %s.\n", name);
 			abort();
 		}
 		return ret;
