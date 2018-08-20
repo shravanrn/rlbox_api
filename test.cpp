@@ -442,7 +442,7 @@ public:
 
 int main(int argc, char const *argv[])
 {
-	printf("Testing calls within my app\n");
+	printf("Testing calls within my app - i.e. no sandbox\n");
 	SandboxTests<RLBox_MyApp> testerMyApp;
 	testerMyApp.init("", "");
 	testerMyApp.runTests();
