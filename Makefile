@@ -32,7 +32,7 @@ mkdir_out:
 	mkdir -p ./out/x64
 
 out/x32/test: mkdir_out $(CURDIR)/test.cpp $(CURDIR)/rlbox.h $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
-	g++ -m32 $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 -g3 -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic -ldl $(NACL_LIBS_32) -o $@
+	g++ -m32 $(WASM_INCLUDES) -std=c++14 -g3 -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic -ldl -o $@
 
 out/x32/libtest.so: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 	g++ -m32 -std=c++11 -g3 -shared -fPIC $(CURDIR)/libtest.cpp -o $@
@@ -41,7 +41,7 @@ out/x32/libtest.nexe: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 	$(NACL_CLANG++32) -O3 -m32 -fPIC -B$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-32/lib/ -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-32/lib -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/toolchain/linux_x86/pnacl_newlib/x86_32-nacl/lib -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-32/lib $(CURDIR)/libtest.cpp -L$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-32/lib -L$(SANDBOXING_NACL_DIR)/native_client/toolchain/linux_x86/pnacl_newlib/x86_32-nacl/lib -L$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-32/lib -ldyn_ldr_sandbox_init -o $@
 
 out/x64/test: mkdir_out $(CURDIR)/test.cpp $(CURDIR)/rlbox.h $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
-	g++ $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 -g3 -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic -ldl $(NACL_LIBS_64) $(WASM_LIBS_64) -o $@
+	g++ $(WASM_INCLUDES) -std=c++14 -g3 -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic -ldl $(WASM_LIBS_64) -o $@
 
 out/x64/libtest.so: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 	g++ -std=c++11 -g3 -shared -fPIC $(CURDIR)/libtest.cpp -o $@

@@ -6,7 +6,9 @@
 #include "libtest.h"
 #include "RLBox_MyApp.h"
 #include "RLBox_DynLib.h"
+#if defined(__native_client)
 #include "RLBox_NaCl.h"
+#endif
 #include "RLBox_Wasm.h"
 #include "testlib_structs_for_cpp_api.h"
 #include "rlbox.h"
@@ -32,7 +34,9 @@ void printTypes()
 
 rlbox_load_library_api(testlib, RLBox_MyApp)
 rlbox_load_library_api(testlib, RLBox_DynLib)
+#if defined(__native_client__)
 rlbox_load_library_api(testlib, RLBox_NaCl)
+#endif
 rlbox_load_library_api(testlib, RLBox_Wasm)
 
 //////////////////////////////////////////////////////////////////
@@ -525,6 +529,7 @@ int main(int argc, char const *argv[])
 	testerDynLib.runTests();
 	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
 
+#if defined(__native_client__)
 	printf("Testing NaCl\n");
 	SandboxTests<RLBox_NaCl> testerNaCl;
 	testerNaCl.init(
@@ -536,6 +541,7 @@ int main(int argc, char const *argv[])
 	, "./libtest.nexe");
 	testerNaCl.runTests();
 	testerNaCl.runBadPointersTest();
+#endif
 
 	#if !(defined(_M_IX86) || defined(__i386__))
 	printf("Testing WASM\n");
