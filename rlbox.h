@@ -558,9 +558,9 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
-			if(sandbox->isValidSandboxedPointer((const void*)field))
+			if(sandbox->isValidSandboxedPointer((const void*)field, my_is_function_ptr_v<T>))
 			{
-				field = (T) sandbox->getUnsandboxedPointer((void*)field);
+				field = (T) sandbox->getUnsandboxedPointer((void*)field, my_is_function_ptr_v<T>);
 			}
 			else
 			{
@@ -800,7 +800,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getAppSwizzledValue(my_add_volatile_t<T> arg, void* exampleUnsandboxedPtr) const
 		{
-			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg, exampleUnsandboxedPtr);
+			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg, exampleUnsandboxedPtr, my_is_function_ptr_v<T>);
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
@@ -1224,7 +1224,7 @@ namespace rlbox
 		tainted<T*, TSandbox> mallocInSandbox(unsigned int count=1)
 		{
 			void* addr = this->impl_mallocInSandbox(sizeof(T) * count);
-			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr)))
+			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr), false /* isFuncPtr */))
 			{
 				abort();
 			}
@@ -1256,14 +1256,14 @@ namespace rlbox
 			return this->impl_GetSandboxedPointer(p);
 		}
 
-		inline void* getUnsandboxedPointer(void* p)
+		inline void* getUnsandboxedPointer(void* p, bool isFuncPtr)
 		{
-			return this->impl_GetUnsandboxedPointer(p);
+			return this->impl_GetUnsandboxedPointer(p, isFuncPtr);
 		}
 
-		inline bool isValidSandboxedPointer(const void* p)
+		inline bool isValidSandboxedPointer(const void* p, bool isFuncPtr)
 		{
-			return this->impl_isValidSandboxedPointer(p);
+			return this->impl_isValidSandboxedPointer(p, isFuncPtr);
 		}
 
 		inline bool isPointerInSandboxMemoryOrNull(const void* p)

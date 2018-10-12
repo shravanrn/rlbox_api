@@ -114,7 +114,7 @@ public:
 		return free(ptr);
 	}
 
-	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr)
+	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr, bool isFuncPtr)
 	{
 		return p;
 	}
@@ -124,7 +124,7 @@ public:
 		return p;
 	}
 
-	inline void* impl_GetUnsandboxedPointer(void* p)
+	inline void* impl_GetUnsandboxedPointer(void* p, bool isFuncPtr)
 	{
 		return p;
 	}
@@ -134,7 +134,7 @@ public:
 		return p;
 	}
 
-	inline bool impl_isValidSandboxedPointer(const void* p)
+	inline bool impl_isValidSandboxedPointer(const void* p, bool isFuncPtr)
 	{
 		return true;
 	}

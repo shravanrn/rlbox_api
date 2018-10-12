@@ -361,7 +361,7 @@ public:
 		#else
 			#error Unsupported platform!
 		#endif
-		return (char*)impl_GetUnsandboxedPointer((void*)sboxMem);
+		return (char*)impl_GetUnsandboxedPointer((void*)sboxMem, false /* isFuncPtr */);
 	}
 
 	inline void* impl_pushStackArr(size_t size)
@@ -385,7 +385,7 @@ public:
 
 	//Nice trick to sandbox and unsandbox pointers without knowing a reference to the sandbox
 	//Gain the sandbox memory's base address from the address of the pointer itself, since the pointer val
-	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr)
+	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr, bool isFuncPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
 			for(NaClSandbox* sandbox : sandboxList)
@@ -433,7 +433,7 @@ public:
 		#endif
 	}
 
-	inline void* impl_GetUnsandboxedPointer(void* p)
+	inline void* impl_GetUnsandboxedPointer(void* p, bool isFuncPtr)
 	{
 		auto ret = (void*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
 		return ret;
@@ -445,7 +445,7 @@ public:
 		return ret;
 	}
 
-	inline bool impl_isValidSandboxedPointer(const void* p)
+	inline bool impl_isValidSandboxedPointer(const void* p, bool isFuncPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
 			uintptr_t max = 1;
