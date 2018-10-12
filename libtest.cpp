@@ -122,3 +122,15 @@ double simplePointerValAddTest(double* ptr, double val)
 	printf("simplePointerValAddTest\n");
 	return val + *ptr;
 }
+
+struct pointersStruct initializePointerStruct(void* initVal)
+{
+	struct pointersStruct ret;
+	ret.firstPointer = initVal;
+	ret.pointerArray[0] = (void*) (((uintptr_t) initVal) + 1);
+	ret.pointerArray[1] = (void*) (((uintptr_t) initVal) + 2);
+	ret.pointerArray[2] = (void*) (((uintptr_t) initVal) + 3);
+	ret.pointerArray[3] = (void*) (((uintptr_t) initVal) + 4);
+	ret.lastPointer =     (void*) (((uintptr_t) initVal) + 5);
+	return ret;
+}

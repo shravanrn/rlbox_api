@@ -550,9 +550,28 @@ namespace rlbox
 			return (T) sandbox->getSandboxedPointer((void*)field);
 		}
 
-		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2> && !(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>))>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>)>
+		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
+		{
+			void** start = (void**) field;
+			void** end = (void**) (((uintptr_t)field) + sizeof(T));
+
+			for(void** curr = start; curr < end; curr = (void**) (((uintptr_t)curr) + sizeof(void*)))
+			{
+				if(sandbox->isValidSandboxedPointer(*curr, my_is_function_ptr_v<my_remove_extent_t<T>>))
+				{
+					*curr = sandbox->getUnsandboxedPointer(*curr, my_is_function_ptr_v<my_remove_extent_t<T>>);
+				}
+				else
+				{
+					*curr = nullptr;
+				}
+			}
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
@@ -769,7 +788,7 @@ namespace rlbox
 			{
 				abort();
 			}
-			my_remove_extent_t<T>* locPtr = &(maskedFieldPtr[x]);
+			my_remove_extent_t<T>* locPtr = (my_remove_extent_t<T>*) &(maskedFieldPtr[x]);
 			return *((tainted<my_remove_extent_t<T>, TSandbox> *) locPtr);
 		}
 	};

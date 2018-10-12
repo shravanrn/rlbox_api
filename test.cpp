@@ -355,6 +355,34 @@ public:
 		ENSURE(resultT == val);
 	}
 
+	void testPointersInStruct()
+	{
+		auto initVal = sandbox->template mallocInSandbox<char>();
+		auto resultT = sandbox_invoke(sandbox, initializePointerStruct, initVal);
+		auto result = resultT
+			.copyAndVerify([this](tainted<pointersStruct, TSandbox>& val){ 
+				pointersStruct ret;
+				ret.firstPointer = val.firstPointer.UNSAFE_Unverified();
+				ret.pointerArray[0] = val.pointerArray[0].UNSAFE_Unverified();
+				ret.pointerArray[1] = val.pointerArray[1].UNSAFE_Unverified();
+				ret.pointerArray[2] = val.pointerArray[2].UNSAFE_Unverified();
+				ret.pointerArray[3] = val.pointerArray[3].UNSAFE_Unverified();
+				ret.lastPointer = val.lastPointer.UNSAFE_Unverified();
+				return ret; 
+			});
+		void* initValRaw = initVal.UNSAFE_Unverified();
+		sandbox->freeInSandbox(initVal);
+
+		ENSURE(
+			result.firstPointer == initValRaw &&
+			result.pointerArray[0] == (void*) (((uintptr_t) initValRaw) + 1) &&
+			result.pointerArray[1] == (void*) (((uintptr_t) initValRaw) + 2) &&
+			result.pointerArray[2] == (void*) (((uintptr_t) initValRaw) + 3) &&
+			result.pointerArray[3] == (void*) (((uintptr_t) initValRaw) + 4) &&
+			result.lastPointer ==     (void*) (((uintptr_t) initValRaw) + 5)
+		);
+	}
+
 	void testStructWithBadPtr()
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructValBadPtr);
@@ -430,6 +458,7 @@ public:
 		testStructurePointers();
 		testStatefulLambdas();
 		testAppPtrFunctionReturn();
+		testPointersInStruct();
 	}
 
 	void runBadPointersTest()

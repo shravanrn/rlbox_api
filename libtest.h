@@ -15,6 +15,13 @@ extern "C" {
         CallbackType fnArray[4];
     };
 
+    struct pointersStruct
+    {
+        void* firstPointer;
+        void* pointerArray[4];
+        void* lastPointer;
+    };
+
     unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b);
     int simpleAddTest(int a, int b);
     size_t simpleStrLenTest(const char* str);
@@ -30,4 +37,5 @@ extern "C" {
     struct testStruct* simpleTestStructPtrBadPtr();
     int* echoPointer(int* pointer);
     double simplePointerValAddTest(double* ptr, double val);
+    struct pointersStruct initializePointerStruct(void* initVal);
 }

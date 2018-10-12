@@ -16,5 +16,14 @@
 	f(int (*[4])(unsigned, const char*, unsigned[1]), fnArray, ##__VA_ARGS__) \
 	g()
 
+#define sandbox_fields_reflection_testlib_class_pointersStruct(f, g, ...) \
+	f(void*, firstPointer, ##__VA_ARGS__) \
+	g() \
+	f(void*[4], pointerArray, ##__VA_ARGS__) \
+	g() \
+	f(void*, lastPointer, ##__VA_ARGS__) \
+	g()
+
 #define sandbox_fields_reflection_testlib_allClasses(f, ...) \
-	f(testStruct, testlib, ##__VA_ARGS__)
+	f(testStruct, testlib, ##__VA_ARGS__) \
+	f(pointersStruct, testlib, ##__VA_ARGS__)
