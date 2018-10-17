@@ -910,6 +910,13 @@ namespace rlbox
 			return verifyFunction(&maskedField);
 		}
 
+		//app_ptr
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline valid_return_t<T> copyAndVerifyAppPtr(std::function<valid_return_t<T>(T)> verifyFunction) const
+		{
+			return verifyFunction(field);
+		}
+
 		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
 		inline bool copyAndVerify(my_decay_noconst_if_array_t<T2> copy, size_t sizeOfCopy, std::function<RLBox_Verify_Status(T, size_t)> verifyFunction) const
 		{

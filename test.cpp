@@ -353,6 +353,15 @@ public:
 		auto appPtr = sandbox->app_ptr(val);
 		auto resultT = sandbox_invoke_return_app_ptr(sandbox, echoPointer, appPtr);
 		ENSURE(resultT == val);
+
+		//Test app pointers in tainted structs
+		auto testPtr = "Testing";
+		auto tempValPtr = sandbox->template mallocInSandbox<testStruct>();
+		tempValPtr->fieldString = sandbox->app_ptr(testPtr);
+		auto testPtr2 = tempValPtr->fieldString.copyAndVerifyAppPtr([](const char* val){ return val; });
+		ENSURE(testPtr == testPtr2);
+
+		sandbox->template freeInSandbox(tempValPtr);
 	}
 
 	void testPointersInStruct()
