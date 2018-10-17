@@ -7,12 +7,13 @@
 #include "RLBox_MyApp.h"
 #include "RLBox_DynLib.h"
 #include "RLBox_NaCl.h"
+#include "RLBox_Wasm.h"
 #include "testlib_structs_for_cpp_api.h"
 #include "rlbox.h"
 
 using namespace rlbox;
 
-#define ENSURE(a) if(!(a)) { printf("%s check failed\n", #a); exit(1); }
+#define ENSURE(a) if(!(a)) { printf("%s check failed\n", #a); abort(); }
 #define UNUSED(a) (void)(a)
 
 //////////////////////////////////////////////////////////////////
@@ -32,6 +33,7 @@ void printTypes()
 rlbox_load_library_api(testlib, RLBox_MyApp)
 rlbox_load_library_api(testlib, RLBox_DynLib)
 rlbox_load_library_api(testlib, RLBox_NaCl)
+rlbox_load_library_api(testlib, RLBox_Wasm)
 
 //////////////////////////////////////////////////////////////////
 
@@ -503,5 +505,15 @@ int main(int argc, char const *argv[])
 	, "./libtest.nexe");
 	testerNaCl.runTests();
 	testerNaCl.runBadPointersTest();
+
+	#if !(defined(_M_IX86) || defined(__i386__))
+	printf("Testing WASM\n");
+	SandboxTests<RLBox_Wasm> testerWasm;
+	testerWasm.init(
+		""
+		, "./libwasm_test.so");
+	testerWasm.runTests();
+	#endif
+
 	return 0;
 }

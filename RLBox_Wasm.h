@@ -4,24 +4,6 @@
 #include <mutex>
 #include "wasm_sandbox.h"
 
-namespace RLBox_Wasm_detail {
-	//https://stackoverflow.com/questions/6512019/can-we-get-the-type-of-a-lambda-argument
-	template<typename Ret, typename... Rest>
-	Ret return_argument_helper(Ret(*) (Rest...));
-
-	template<typename Ret, typename F, typename... Rest>
-	Ret return_argument_helper(Ret(F::*) (Rest...));
-
-	template<typename Ret, typename F, typename... Rest>
-	Ret return_argument_helper(Ret(F::*) (Rest...) const);
-
-	template <typename F>
-	decltype(return_argument_helper(&F::operator())) return_argument_helper(F);
-
-	template <typename T>
-	using return_argument = decltype(return_argument_helper(std::declval<T>()));
-};
-
 class RLBox_Wasm
 {
 private:
@@ -177,9 +159,11 @@ public:
 		std::lock_guard<std::mutex> lock(callbackMutex);
 		auto stateWrapper = new WasmSandboxStateWrapper(this, state, callback);
 		callbackSlotInfo[key] = stateWrapper;
-		WasmSandboxCallback* registeredCallback = sandbox->registerCallback(impl_CallbackReceiver<TRet, TArgs...>, (void*)stateWrapper);
+		using funcType = TRet(*)(void*, TArgs...);
+		auto callbackStub = (funcType) impl_CallbackReceiver<TRet, TArgs...>;
+		WasmSandboxCallback* registeredCallback = sandbox->registerCallback(callbackStub, (void*)stateWrapper);
 		stateWrapper->registeredCallback = registeredCallback;
-		return registeredCallback;
+		return (void*)(uintptr_t)registeredCallback->callbackSlot;
 	}
 
 	inline void impl_UnregisterCallback(void* key)
@@ -201,8 +185,8 @@ public:
 		return sandbox->symbolLookup(name);
 	}
 
-	template <typename T, typename ... TArgs>
-	RLBox_Wasm_detail::return_argument<T> impl_InvokeFunction(T* fnPtr, TArgs... params)
+	template <typename TRet, typename ... TOrigArgs, typename ... TArgs>
+	TRet impl_InvokeFunction(TRet(*fnPtr)(TOrigArgs...), TArgs... params)
 	{
 		return sandbox->invokeFunction(fnPtr, params...);
 	}
@@ -215,3 +199,5 @@ public:
 		return (TRet) rawRet;
 	}
 };
+
+std::vector<WasmSandbox*> RLBox_Wasm::sandboxList __attribute__((weak));
