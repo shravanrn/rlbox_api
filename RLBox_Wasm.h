@@ -37,6 +37,13 @@ private:
 	}
 
 public:
+	#if defined(_M_X64) || defined(__x86_64__)
+		static const bool impl_Handle32bitPointerArrays;
+		uint32_t impl_MaintainAppPtrMapCounter = 0;
+		std::mutex impl_MaintainAppPtrMapMutex;
+		std::map<void*, void*> impl_MaintainAppPtrMap;
+	#endif
+
 	inline void impl_CreateSandbox(const char* sandboxRuntimePath, const char* libraryPath)
 	{
 		sandbox = WasmSandbox::createSandbox(libraryPath);

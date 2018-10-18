@@ -360,7 +360,7 @@ public:
 		auto testPtr = "Testing";
 		auto tempValPtr = sandbox->template mallocInSandbox<testStruct>();
 		tempValPtr->fieldString = sandbox->app_ptr(testPtr);
-		auto testPtr2 = tempValPtr->fieldString.copyAndVerifyAppPtr([](const char* val){ return val; });
+		auto testPtr2 = tempValPtr->fieldString.copyAndVerifyAppPtr(sandbox, [](const char* val){ return val; });
 		ENSURE(testPtr == testPtr2);
 
 		sandbox->template freeInSandbox(tempValPtr);
@@ -381,16 +381,46 @@ public:
 				ret.lastPointer = val.lastPointer.UNSAFE_Unverified();
 				return ret; 
 			});
-		void* initValRaw = initVal.UNSAFE_Unverified();
+		char* initValRaw = initVal.UNSAFE_Unverified();
 		sandbox->freeInSandbox(initVal);
 
 		ENSURE(
 			result.firstPointer == initValRaw &&
-			result.pointerArray[0] == (void*) (((uintptr_t) initValRaw) + 1) &&
-			result.pointerArray[1] == (void*) (((uintptr_t) initValRaw) + 2) &&
-			result.pointerArray[2] == (void*) (((uintptr_t) initValRaw) + 3) &&
-			result.pointerArray[3] == (void*) (((uintptr_t) initValRaw) + 4) &&
-			result.lastPointer ==     (void*) (((uintptr_t) initValRaw) + 5)
+			result.pointerArray[0] == (char*) (((uintptr_t) initValRaw) + 1) &&
+			result.pointerArray[1] == (char*) (((uintptr_t) initValRaw) + 2) &&
+			result.pointerArray[2] == (char*) (((uintptr_t) initValRaw) + 3) &&
+			result.pointerArray[3] == (char*) (((uintptr_t) initValRaw) + 4) &&
+			result.lastPointer ==     (char*) (((uintptr_t) initValRaw) + 5)
+		);
+	}
+
+	void test32BitPointerEdgeCases()
+	{
+		auto initVal = sandbox->template mallocInSandbox<char>(8);
+		*(initVal.getPointerIncrement(sandbox, 3)) = 'v';
+		char* initValRaw = initVal.UNSAFE_Unverified();
+
+		auto resultT = sandbox_invoke(sandbox, initializePointerStructPtr, initVal);
+
+		//check that reading a pointer in an array doesn't read neighboring elements
+		ENSURE(
+			resultT->pointerArray[0].UNSAFE_Unverified() == (char*) (((uintptr_t) initValRaw) + 1)
+		);
+
+		//check that a write doesn't overwrite neighboring elements
+		resultT->pointerArray[0] = nullptr;
+		ENSURE(
+			resultT->pointerArray[1].UNSAFE_Unverified() == (char*) (((uintptr_t) initValRaw) + 2)
+		);
+
+		//check that array reference decay followed by a read doesn't read neighboring elements
+		tainted<char**, TSandbox> elRef = &(resultT->pointerArray[2]);
+		ENSURE((**elRef).UNSAFE_Unverified() == 'v');
+
+		//check that array reference decay followed by a write doesn't overwrite neighboring elements
+		*elRef = nullptr;
+		ENSURE(
+			resultT->pointerArray[3].UNSAFE_Unverified() == (char*) (((uintptr_t) initValRaw) + 4)
 		);
 	}
 
@@ -470,6 +500,7 @@ public:
 		testStatefulLambdas();
 		testAppPtrFunctionReturn();
 		testPointersInStruct();
+		test32BitPointerEdgeCases();
 	}
 
 	void runBadPointersTest()

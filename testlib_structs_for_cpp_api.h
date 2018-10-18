@@ -17,11 +17,11 @@
 	g()
 
 #define sandbox_fields_reflection_testlib_class_pointersStruct(f, g, ...) \
-	f(void*, firstPointer, ##__VA_ARGS__) \
+	f(char*, firstPointer, ##__VA_ARGS__) \
 	g() \
-	f(void*[4], pointerArray, ##__VA_ARGS__) \
+	f(char*[4], pointerArray, ##__VA_ARGS__) \
 	g() \
-	f(void*, lastPointer, ##__VA_ARGS__) \
+	f(char*, lastPointer, ##__VA_ARGS__) \
 	g()
 
 #define sandbox_fields_reflection_testlib_allClasses(f, ...) \

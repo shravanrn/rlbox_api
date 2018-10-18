@@ -123,14 +123,27 @@ double simplePointerValAddTest(double* ptr, double val)
 	return val + *ptr;
 }
 
-struct pointersStruct initializePointerStruct(void* initVal)
+struct pointersStruct initializePointerStruct(char* initVal)
 {
 	struct pointersStruct ret;
 	ret.firstPointer = initVal;
-	ret.pointerArray[0] = (void*) (((uintptr_t) initVal) + 1);
-	ret.pointerArray[1] = (void*) (((uintptr_t) initVal) + 2);
-	ret.pointerArray[2] = (void*) (((uintptr_t) initVal) + 3);
-	ret.pointerArray[3] = (void*) (((uintptr_t) initVal) + 4);
-	ret.lastPointer =     (void*) (((uintptr_t) initVal) + 5);
+	ret.pointerArray[0] = (char*) (((uintptr_t) initVal) + 1);
+	ret.pointerArray[1] = (char*) (((uintptr_t) initVal) + 2);
+	ret.pointerArray[2] = (char*) (((uintptr_t) initVal) + 3);
+	ret.pointerArray[3] = (char*) (((uintptr_t) initVal) + 4);
+	ret.lastPointer =     (char*) (((uintptr_t) initVal) + 5);
+	return ret;
+}
+
+
+struct pointersStruct* initializePointerStructPtr(char* initVal)
+{
+	struct pointersStruct* ret = (struct pointersStruct*) malloc(sizeof(struct pointersStruct));
+	ret->firstPointer = initVal;
+	ret->pointerArray[0] = (char*) (((uintptr_t) initVal) + 1);
+	ret->pointerArray[1] = (char*) (((uintptr_t) initVal) + 2);
+	ret->pointerArray[2] = (char*) (((uintptr_t) initVal) + 3);
+	ret->pointerArray[3] = (char*) (((uintptr_t) initVal) + 4);
+	ret->lastPointer =     (char*) (((uintptr_t) initVal) + 5);
 	return ret;
 }

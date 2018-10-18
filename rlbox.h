@@ -14,6 +14,36 @@
 #include <string.h>
 #include <cstdint>
 
+
+namespace rlbox_detail {
+	//https://en.wikibooks.org/wiki/More_C++_Idioms/Member_Detector
+	#define GENERATE_HAS_MEMBER(member)													\
+	template <class T>																	\
+	class HasMember_##member {															\
+	private:																			\
+		using Yes = char[2];															\
+		using  No = char[1];															\
+		struct Fallback { int member; };												\
+		struct Derived : T, Fallback { };												\
+																						\
+		template < class U >															\
+		static No& test ( decltype(U::member)* );										\
+		template < typename U >															\
+		static Yes& test ( U* );														\
+																						\
+	public:																				\
+		static constexpr bool RESULT = sizeof(test<Derived>(nullptr)) == sizeof(Yes); 	\
+	};																					\
+																						\
+	template < class T >																\
+	struct has_member_##member : public std::integral_constant<bool, HasMember_##member<T>::RESULT>{}
+
+	GENERATE_HAS_MEMBER(impl_Handle32bitPointerArrays);
+	#undef GENERATE_HAS_MEMBER
+
+	
+}
+
 namespace rlbox
 {
 	//https://stackoverflow.com/questions/19532475/casting-a-variadic-parameter-pack-to-void
@@ -555,7 +585,7 @@ namespace rlbox
 		{
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>)>
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
 			void** start = (void**) field;
@@ -570,6 +600,30 @@ namespace rlbox
 				else
 				{
 					*curr = nullptr;
+				}
+			}
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
+		{
+			void** start = (void**) field;
+			void** endRead = (void**) (((uintptr_t)field) + (sizeof(T)/2) - 4);
+			void** endWrite = (void**) (((uintptr_t)field) + sizeof(T) - 8);
+
+			for(void **currRead = endRead, **currWrite = endWrite; 
+				currRead >= start; 
+				currRead = (void**) (((uintptr_t)currRead) - 4), currWrite = (void**) (((uintptr_t)currWrite) - 8)
+			)
+			{
+				void* curr = (void*)(((uintptr_t)*currRead) & 0xFFFFFFFF);
+				if(sandbox->isValidSandboxedPointer(curr, my_is_function_ptr_v<my_remove_extent_t<T>>))
+				{
+					*currWrite = sandbox->getUnsandboxedPointer(curr, my_is_function_ptr_v<my_remove_extent_t<T>>);
+				}
+				else
+				{
+					*currWrite = nullptr;
 				}
 			}
 		}
@@ -779,6 +833,17 @@ namespace rlbox
 			return result;
 		}
 
+		inline tainted<T, TSandbox> getPointerIncrement(RLBoxSandbox<TSandbox>* sandbox, size_t size) const noexcept
+		{
+			auto result = UNSAFE_Unverified() + size;
+			if (!sandbox->isPointerInSandboxMemoryOrNull(result))
+			{
+				abort();
+			}
+			auto retPtr = (tainted<T, TSandbox>*) &result;
+			return *retPtr;
+		}
+
 		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
 		inline tainted<my_remove_extent_t<T>, TSandbox>& operator[] (size_t x) const
 		{
@@ -833,6 +898,21 @@ namespace rlbox
 		{
 			return (T) TSandbox::impl_GetSandboxedPointer((void*) arg, exampleUnsandboxedPtr);
 		}
+
+		template<typename TRHS, typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		inline void assignField(TRHS& value)
+		{
+			auto fieldRef = (uint32_t*) &field;
+			auto valueRef = (uint32_t*) &value;
+			*fieldRef = *valueRef;
+		}
+
+		template<typename TRHS, typename T2=T, ENABLE_IF(!(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value))>
+		inline void assignField(TRHS& value)
+		{
+			field = value;
+		}
+
 	public:
 
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
@@ -911,10 +991,22 @@ namespace rlbox
 		}
 
 		//app_ptr
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
-		inline valid_return_t<T> copyAndVerifyAppPtr(std::function<valid_return_t<T>(T)> verifyFunction) const
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		inline valid_return_t<T> copyAndVerifyAppPtr(RLBoxSandbox<TSandbox>* sandbox, std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			return verifyFunction(field);
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		inline valid_return_t<T> copyAndVerifyAppPtr(RLBoxSandbox<TSandbox>* sandbox, std::function<valid_return_t<T>(T)> verifyFunction) const
+		{
+			auto p_appPtrMap = sandbox->getMaintainAppPtrMap();
+			auto it = p_appPtrMap->find((void*) field);
+			T val = nullptr;
+			if (it != p_appPtrMap->end()) {
+				val = (T) it->second;
+			}
+			return verifyFunction(val);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
@@ -973,35 +1065,38 @@ namespace rlbox
 		template<typename TRHS, ENABLE_IF(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const TRHS& arg) noexcept
 		{
-			field = arg;
+			assignField(arg);
 			return *this;
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_pointer_v<T> && my_is_assignable_v<T&, TRHS*>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const sandbox_app_ptr_wrapper<TRHS>& arg) noexcept
 		{
-			field = arg.UNSAFE_Sandboxed();
+			auto val = arg.UNSAFE_Sandboxed();
+			assignField(val);
 			return *this;
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS*>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const sandbox_callback_helper<TRHS, TSandbox>& arg) noexcept
 		{
-			field = arg.UNSAFE_Sandboxed();
+			auto val = arg.UNSAFE_Sandboxed();
+			assignField(val);
 			return *this;
 		}
 
 		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted<TRHS, TSandbox>& arg) noexcept
 		{
-			field = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
+			auto val = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
+			assignField(val);
 			return *this;
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const std::nullptr_t& arg) noexcept
 		{
-			field = arg;
+			assignField(arg);
 			return *this;
 		}
 
@@ -1017,6 +1112,17 @@ namespace rlbox
 		{
 			auto ret = (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) getAppSwizzledValue(field, (void*) &field /* exampleUnsandboxedPtr */);
 			return *ret;
+		}
+
+		inline tainted<T, TSandbox> getPointerIncrement(RLBoxSandbox<TSandbox>* sandbox, size_t size) const noexcept
+		{
+			auto result = UNSAFE_Unverified() + size;
+			if (!sandbox->isPointerInSandboxMemoryOrNull(result))
+			{
+				abort();
+			}
+			auto retPtr = (tainted<T, TSandbox>*) &result;
+			return *retPtr;
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
@@ -1058,10 +1164,23 @@ namespace rlbox
 			return result;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline tainted_volatile<my_remove_extent_t<T>, TSandbox>& operator[] (size_t x) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
+			auto lastIndex = sizeof(T) / sizeof(my_remove_extent_t<T>);
+			if(x >= lastIndex)
+			{
+				abort();
+			}
+			my_remove_extent_t<T>* locPtr = (my_remove_extent_t<T>*) &(maskedFieldPtr[x]);
+			return *((tainted_volatile<my_remove_extent_t<T>, TSandbox> *) locPtr);
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		inline tainted_volatile<my_remove_extent_t<T>, TSandbox>& operator[] (size_t x) const
+		{
+			auto maskedFieldPtr = (uint32_t*) UNSAFE_Unverified();
 			auto lastIndex = sizeof(T) / sizeof(my_remove_extent_t<T>);
 			if(x >= lastIndex)
 			{
@@ -1315,11 +1434,24 @@ namespace rlbox
 			return ret;
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		return_argument<T> invokeWithFunctionPointerReturnAppPtr(T* fnPtr, TArgs&&... params)
 		{
 			auto ret = this->impl_InvokeFunctionReturnAppPtr(fnPtr, sandbox_removeWrapper(this, params)...);
 			return ret;
+		}
+
+		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		return_argument<T> invokeWithFunctionPointerReturnAppPtr(T* fnPtr, TArgs&&... params)
+		{
+			auto ret = this->impl_InvokeFunctionReturnAppPtr(fnPtr, sandbox_removeWrapper(this, params)...);
+			auto p_appPtrMap = getMaintainAppPtrMap();
+			auto it = p_appPtrMap->find((void*) ret);
+			return_argument<T> val = nullptr;
+			if (it != p_appPtrMap->end()) {
+				val = (return_argument<T>) it->second;
+			}
+			return val;
 		}
 
 		void* getFunctionPointerFromCache(const char* fnName)
@@ -1346,12 +1478,47 @@ namespace rlbox
 			return fnPtr;
 		}
 
-		template<typename T>
+		template<typename T, typename TSandbox2=TSandbox, ENABLE_IF(!rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox2>::value)>
 		inline sandbox_app_ptr_wrapper<T> app_ptr(T* arg)
 		{
 			sandbox_app_ptr_wrapper<T> ret;
 			ret.field = arg;
 			return ret;
+		}
+
+		template<typename T, typename TSandbox2=TSandbox, ENABLE_IF(rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox2>::value)>
+		inline sandbox_app_ptr_wrapper<T> app_ptr(T* arg)
+		{
+			auto p_appPtrMap = getMaintainAppPtrMap();
+
+			bool found = false;
+			T* key;
+			for (auto it = p_appPtrMap->begin(); it != p_appPtrMap->end(); it++)
+			{
+				if (it->second == arg)
+				{
+					key = (T*) it->first;
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				std::lock_guard<std::mutex> lock(this->impl_MaintainAppPtrMapMutex);
+				this->impl_MaintainAppPtrMapCounter++;
+				key = (T*)(uintptr_t)this->impl_MaintainAppPtrMapCounter;
+				(*p_appPtrMap)[(void*)key] = (void*) arg;
+			}
+
+			sandbox_app_ptr_wrapper<T> ret;
+			ret.field = key;
+			return ret;
+		}
+
+		inline std::map<void*, void*>* getMaintainAppPtrMap()
+		{
+			return &(this->impl_MaintainAppPtrMap);
 		}
 
 		template <typename T>

@@ -17,9 +17,9 @@ extern "C" {
 
     struct pointersStruct
     {
-        void* firstPointer;
-        void* pointerArray[4];
-        void* lastPointer;
+        char* firstPointer;
+        char* pointerArray[4];
+        char* lastPointer;
     };
 
     unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b);
@@ -37,5 +37,6 @@ extern "C" {
     struct testStruct* simpleTestStructPtrBadPtr();
     int* echoPointer(int* pointer);
     double simplePointerValAddTest(double* ptr, double val);
-    struct pointersStruct initializePointerStruct(void* initVal);
+    struct pointersStruct initializePointerStruct(char* initVal);
+    struct pointersStruct* initializePointerStructPtr(char* initVal);
 }
