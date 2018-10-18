@@ -544,6 +544,7 @@ int main(int argc, char const *argv[])
 		""
 		, "./libwasm_test.so");
 	testerWasm.runTests();
+	testerWasm.runBadPointersTest();
 	#endif
 
 	return 0;

@@ -74,7 +74,7 @@ public:
 
 	inline char* impl_getMaxPointer()
 	{
-		void* maxPtr = (void*) sandbox->getTotalMemory();
+		void* maxPtr = (void*) (((uintptr_t)sandbox->getTotalMemory()) - 1);
 		return (char*) sandbox->getUnsandboxedPointer(maxPtr);
 	}
 
