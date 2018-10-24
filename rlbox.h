@@ -1520,9 +1520,7 @@ namespace rlbox
 				(*p_appPtrMap)[(void*)key] = (void*) arg;
 			}
 
-			sandbox_app_ptr_wrapper<T> ret;
-			ret.field = key;
-			return ret;
+			return sandbox_app_ptr_wrapper<T>(key);
 		}
 
 		inline std::map<void*, void*>* getMaintainAppPtrMap()
