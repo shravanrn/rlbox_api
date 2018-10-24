@@ -884,7 +884,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getAppSwizzledValue(my_add_volatile_t<T> arg, void* exampleUnsandboxedPtr) const
 		{
-			// XXX void cast drops constness
+			// static_cast drops constness
 			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg, exampleUnsandboxedPtr, my_is_function_ptr_v<T>);
 		}
 
@@ -1104,7 +1104,7 @@ namespace rlbox
 		inline tainted<T*, TSandbox> operator&() const noexcept
 		{
 			tainted<T*, TSandbox> ret;
-			// XXX drops constness
+			// static_cast drops constness
 			ret.field = (T*) &field;
 			return ret;
 		}
@@ -1243,7 +1243,7 @@ namespace rlbox
  		\
 		inline T UNSAFE_Unverified() const noexcept \
 		{ \
-			/* XXX terrible cast */ \
+			/* Can't reinterpret_cast due to constness */ \
 			return *((T*)this); \
 		} \
 		 \
@@ -1528,7 +1528,7 @@ namespace rlbox
 		inline sandbox_stackarr_helper<T, TSandbox> stackarr(T* arg, size_t size)
 		{
 			T* argInSandbox = static_cast<T*>(this->impl_pushStackArr(size));
-			// XXX drops constness
+			// static_cast drops constness
 			memcpy((void*) argInSandbox, (void*) arg, size);
 
 			sandbox_stackarr_helper<T, TSandbox> ret(this, argInSandbox, size);
@@ -1547,7 +1547,7 @@ namespace rlbox
 		inline sandbox_heaparr_helper<T, TSandbox> heaparr(T* arg, size_t size)
 		{
 			T* argInSandbox = static_cast<T*>(this->impl_mallocInSandbox(size));
-			// XXX drops constness
+			// static_cast drops constness
 			memcpy((void*)argInSandbox, (void*)arg, size);
 
 			sandbox_heaparr_helper<T, TSandbox> ret(this, argInSandbox);
