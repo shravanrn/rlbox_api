@@ -716,14 +716,16 @@ namespace rlbox
 			return false;
 		}
 
-		inline my_decay_if_array_t<T> copyAndVerifyArray(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, unsigned int elementCount, T defaultValue) const
+		inline my_decay_if_array_t<T> copyAndVerifyArray(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, std::uint32_t elementCount, T defaultValue) const
 		{
 			typedef my_remove_pointer_t<T> nonPointerType;
 			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
-			uintptr_t arrayEnd = maskedFieldInt + sizeof(nonPointerType) * elementCount;
+			static_assert(sizeof(nonPointerType) <= 0xFFFFFFFF);
+			auto arrayByteLen = static_cast<uint64_t>(sizeof(nonPointerType)) * static_cast<uint64_t>(elementCount);
+			uintptr_t arrayEnd = maskedFieldInt + arrayByteLen;
 
 			//check for overflow
 			if(maskedFieldInt >= arrayEnd
@@ -733,7 +735,7 @@ namespace rlbox
 			}
 
 			nonPointerConstType* copy = new nonPointerConstType[elementCount];
-			memcpy(copy, maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			memcpy(copy, maskedFieldPtr, arrayByteLen);
 			auto isSafe = verifyFunction(copy) == RLBox_Verify_Status::SAFE;
 			if(!isSafe) {
 				delete[] copy;
@@ -1038,14 +1040,16 @@ namespace rlbox
 			return false;
 		}
 
-		inline my_decay_if_array_t<T> copyAndVerifyArray(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, unsigned int elementCount, T defaultValue) const
+		inline my_decay_if_array_t<T> copyAndVerifyArray(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, std::uint32_t elementCount, T defaultValue) const
 		{
 			typedef my_remove_pointer_t<T> nonPointerType;
 			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
-			uintptr_t arrayEnd = maskedFieldInt + sizeof(nonPointerType) * elementCount;
+			static_assert(sizeof(nonPointerType) <= 0xFFFFFFFF);
+			auto arrayByteLen = static_cast<uint64_t>(sizeof(nonPointerType)) * static_cast<uint64_t>(elementCount);
+			uintptr_t arrayEnd = maskedFieldInt + arrayByteLen;
 
 			//check for overflow
 			if(maskedFieldInt >= arrayEnd
@@ -1055,7 +1059,7 @@ namespace rlbox
 			}
 
 			nonPointerConstType* copy = new nonPointerConstType[elementCount];
-			memcpy(copy, maskedFieldPtr, sizeof(nonPointerConstType) * elementCount);
+			memcpy(copy, maskedFieldPtr, arrayByteLen);
 			auto isSafe = verifyFunction(copy) == RLBox_Verify_Status::SAFE;
 			if(!isSafe) {
 				delete[] copy;
