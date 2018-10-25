@@ -6,8 +6,12 @@
 #include "libtest.h"
 #include "RLBox_MyApp.h"
 #include "RLBox_DynLib.h"
-#include "RLBox_NaCl.h"
-#include "RLBox_Wasm.h"
+#ifndef NO_NACL
+	#include "RLBox_NaCl.h"
+#endif
+#ifndef NO_WASM
+	#include "RLBox_Wasm.h"
+#endif
 #include "testlib_structs_for_cpp_api.h"
 #include "rlbox.h"
 
@@ -32,8 +36,12 @@ void printTypes()
 
 rlbox_load_library_api(testlib, RLBox_MyApp)
 rlbox_load_library_api(testlib, RLBox_DynLib)
-rlbox_load_library_api(testlib, RLBox_NaCl)
-rlbox_load_library_api(testlib, RLBox_Wasm)
+#ifndef NO_NACL
+	rlbox_load_library_api(testlib, RLBox_NaCl)
+#endif
+#ifndef NO_WASM
+	rlbox_load_library_api(testlib, RLBox_Wasm)
+#endif
 
 //////////////////////////////////////////////////////////////////
 
@@ -525,26 +533,30 @@ int main(int argc, char const *argv[])
 	testerDynLib.runTests();
 	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
 
-	printf("Testing NaCl\n");
-	SandboxTests<RLBox_NaCl> testerNaCl;
-	testerNaCl.init(
-	#if defined(_M_IX86) || defined(__i386__)
-	"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
-	#else
-	"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
+	#ifndef NO_NACL
+		printf("Testing NaCl\n");
+		SandboxTests<RLBox_NaCl> testerNaCl;
+		testerNaCl.init(
+		#if defined(_M_IX86) || defined(__i386__)
+		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
+		#else
+		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
+		#endif
+		, "./libtest.nexe");
+		testerNaCl.runTests();
+		testerNaCl.runBadPointersTest();
 	#endif
-	, "./libtest.nexe");
-	testerNaCl.runTests();
-	testerNaCl.runBadPointersTest();
 
-	#if !(defined(_M_IX86) || defined(__i386__))
-	printf("Testing WASM\n");
-	SandboxTests<RLBox_Wasm> testerWasm;
-	testerWasm.init(
-		""
-		, "./libwasm_test.so");
-	testerWasm.runTests();
-	testerWasm.runBadPointersTest();
+	#ifndef NO_WASM
+		#if !(defined(_M_IX86) || defined(__i386__))
+		printf("Testing WASM\n");
+		SandboxTests<RLBox_Wasm> testerWasm;
+		testerWasm.init(
+			""
+			, "./libwasm_test.so");
+		testerWasm.runTests();
+		testerWasm.runBadPointersTest();
+		#endif
 	#endif
 
 	return 0;
