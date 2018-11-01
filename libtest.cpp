@@ -92,11 +92,11 @@ struct testStruct simpleTestStructValBadPtr()
 {
 	struct testStruct ret = simpleTestStructVal();
 	//explicitly mess up the top bits of the pointer. The sandbox checks outside the sandbox should catch this
-	#if defined(_M_IX86) || defined(__i386__)
+	if (sizeof(void*) == 4) {
 		ret.fieldString = (char *)((((uintptr_t) ret.fieldString) & 0x3FFFFFFF) | 0xC0000000);
-	#else
+	} else {
 		ret.fieldString = (char *)((((uintptr_t) ret.fieldString) & 0xFFFFFFFF) | 0x1234567800000000);
-	#endif
+	}
 	return ret;
 }
 
@@ -104,11 +104,11 @@ struct testStruct* simpleTestStructPtrBadPtr()
 {
 	struct testStruct* ret = simpleTestStructPtr();
 	//explicitly mess up the top bits of the pointer. The sandbox checks outside the sandbox should catch this
-	#if defined(_M_IX86) || defined(__i386__)
+	if (sizeof(void*) == 4) {
 		ret->fieldString = (char *)((((uintptr_t) ret->fieldString) & 0x3FFFFFFF) | 0xC0000000);
-	#else
+	} else {
 		ret->fieldString = (char *)((((uintptr_t) ret->fieldString) & 0xFFFFFFFF) | 0x1234567800000000);
-	#endif
+	}
 	return ret;
 }
 
