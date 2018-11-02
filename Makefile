@@ -6,8 +6,8 @@
 # Note - Use NO_WASM=1 to disable wasm build
 
 SANDBOXING_NACL_DIR=$(shell realpath ../Sandboxing_NaCl)
-WASM_SANDBOX_DIR=$(shell realpath ../wasm-sandboxing)
-EMSDK_DIR=$(shell realpath ../emsdk)
+WASM_SANDBOX_DIR?=$(shell realpath ../wasm-sandboxing)
+EMSDK_DIR?=$(shell realpath ../emsdk)
 ifeq ($(NO_NACL),1)
 	NACL_INCLUDES=-DNO_NACL
 	NACL_LIBS_32=
