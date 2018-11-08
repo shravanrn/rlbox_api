@@ -33,12 +33,19 @@ endif
 # 1 - .a input lib file
 # 2 - .js output file
 define convert_to_wasm =
-	emcc $(1) -O0 -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s EMULATED_FUNCTION_POINTERS=1 -s "EXPORTED_FUNCTIONS=[$$($(WASM_SANDBOX_DIR)/builds/getLLVMFileFunctions $(1)), '_malloc', '_free']" -o $(2) && \
-	$(WASM_SANDBOX_DIR)/bin/wasm2wat --inline-exports --inline-imports -f $(patsubst %.js,%.wasm,$(2)) -o $(patsubst %.js,%.wat,$(2)) && \
-	$(WASM_SANDBOX_DIR)/bin/wasm2c $(patsubst %.js,%.wasm,$(2)) -o $(patsubst %.js,%.c,$(2)) && \
-	$(WASM_SANDBOX_DIR)/builds/generateModuleSpecificConstants $(2) > $(patsubst %.js,%_rt.cpp,$(2)) && \
-	gcc -g3 -fPIC -I $(WASM_SANDBOX_DIR)/wasm2c -c $(patsubst %.js,%.c,$(2)) -o $(patsubst %.js,%.o,$(2)) && \
-	g++ -g3 -fPIC -std=c++11 $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-impl.cpp $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-syscall-impl.cpp $(patsubst %.js,%_rt.cpp,$(2)) $(patsubst %.js,%.o,$(2)) -I $(WASM_SANDBOX_DIR)/wasm2c -fPIC -shared -o $(patsubst %.js,%.so,$(2))
+	input_lib=$1; \
+	wasm_output=$(patsubst %.js,%.wasm,$(2)); \
+	wat_output=$(patsubst %.js,%.wat,$(2)); \
+	converted_c=$(patsubst %.js,%.c,$(2)); \
+	runtime_cpp=$(patsubst %.js,%_rt.cpp,$(2)); \
+	object_file=$(patsubst %.js,%.o,$(2)); \
+	shared_library=$(patsubst %.js,%.so,$(2)); \
+	emcc $${input_lib} -O0 -s WASM=1 -s TOTAL_MEMORY=2147418112 -s ALLOW_MEMORY_GROWTH=0 -s LEGALIZE_JS_FFI=0 -s EMULATED_FUNCTION_POINTERS=1 -s "EXPORTED_FUNCTIONS=[$$($(WASM_SANDBOX_DIR)/builds/getLLVMFileFunctions $(1)), '_malloc', '_free']" -o $(2) && \
+	$(WASM_SANDBOX_DIR)/bin/wasm2wat --inline-exports --inline-imports -f $${wasm_output} -o $${wat_output} && \
+	$(WASM_SANDBOX_DIR)/bin/wasm2c $${wasm_output} -o $${converted_c} && \
+	$(WASM_SANDBOX_DIR)/builds/generateModuleSpecificConstants $(2) > $${runtime_cpp} && \
+	gcc -g3 -fPIC -I $(WASM_SANDBOX_DIR)/wasm2c -c $${converted_c} -o $${object_file} && \
+	g++ -g3 -fPIC -std=c++11 $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-impl.cpp $(WASM_SANDBOX_DIR)/wasm2c/wasm-rt-syscall-impl.cpp $${runtime_cpp} $${object_file} -I $(WASM_SANDBOX_DIR)/wasm2c -fPIC -shared -o $${shared_library}
 endef
 
 mkdir_out:
@@ -80,7 +87,7 @@ out/x64/libwasm_test.so: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 		source $(EMSDK_DIR)/emsdk_env.sh
 		emcc -std=c++11 -g3 -O0 $(CURDIR)/libtest.cpp -c -o ./out/x64/libwasm_test.o
 		cd ./out/x64
-		$(call convert_to_wasm, libwasm_test.o, libwasm_test.js)
+		$(call convert_to_wasm,libwasm_test.o,libwasm_test.js)
 endif
 
 build: out/x32/test out/x64/test out/x32/libtest.so out/x64/libtest.so out/x32/libtest.nexe out/x64/libtest.nexe out/x64/libwasm_test.so
