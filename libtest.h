@@ -39,4 +39,5 @@ extern "C" {
     double simplePointerValAddTest(double* ptr, double val);
     struct pointersStruct initializePointerStruct(char* initVal);
     struct pointersStruct* initializePointerStructPtr(char* initVal);
+    int internalCallback(unsigned, const char*, unsigned[1]);
 }

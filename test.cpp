@@ -226,6 +226,20 @@ public:
 		ENSURE(result == 10);
 	}
 
+	void testInternalCallback()
+	{
+		// tainted<testStruct*, TSandbox> pFoo = sandbox->template mallocInSandbox<testStruct>();
+
+		// auto fnPtr = (decltype(internalCallback)*) sandbox->getFunctionPointerFromCache("internalCallback");
+		// auto convFnPtr = sandbox_convertToUnverified<decltype(internalCallback)*>(sandbox, fnPtr);
+		// pFoo->fieldFnPtr = convFnPtr;
+
+		// auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), convFnPtr);
+		// auto result = resultT
+		// 	.copyAndVerify([](int val){ return val > 0 && val < 100? val : -1; });
+		// ENSURE(result == 10);
+	}
+
 	void testCallbackOnStruct()
 	{
 		tainted<testStruct, TSandbox> foo;
@@ -499,6 +513,7 @@ public:
 		testPointerVerificationFunctionFormats();
 		testStackAndHeapArrAndStringParams();
 		testCallback();
+		testInternalCallback();
 		testCallbackOnStruct();
 		testEchoAndPointerLocations();
 		testFloatingPoint();

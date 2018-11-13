@@ -147,3 +147,8 @@ struct pointersStruct* initializePointerStructPtr(char* initVal)
 	ret->lastPointer =     (char*) (((uintptr_t) initVal) + 5);
 	return ret;
 }
+
+int internalCallback(unsigned a, const char* b, unsigned c[1])
+{
+	return a + strlen(b);
+}

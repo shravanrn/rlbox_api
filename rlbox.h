@@ -908,7 +908,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
-			return (T) TSandbox::impl_GetSandboxedPointer(static_cast<void*>(arg), exampleUnsandboxedPtr);
+			return (T) TSandbox::impl_GetSandboxedPointer((void*)(arg), exampleUnsandboxedPtr);
 		}
 
 		template<typename TRHS, typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
@@ -1105,7 +1105,7 @@ namespace rlbox
 			return *this;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, ENABLE_IF(!my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted<TRHS, TSandbox>& arg) noexcept
 		{
 			auto val = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
@@ -1592,7 +1592,6 @@ namespace rlbox
 			auto ret = sandbox_callback_helper<fnType, TSandbox>(this, (fnType*)(uintptr_t)callbackRegisteredAddress, stateObject);
 			return ret;
 		}
-
 	};
 
 	template<typename TLHS, typename TRHS, typename TSandbox, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>> && my_is_pointer_v<TLHS> && my_is_pointer_v<TRHS>)>
@@ -1606,7 +1605,6 @@ namespace rlbox
 	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
 	#define sandbox_invoke_return_app_ptr(sandbox, fnName, ...) sandbox->invokeWithFunctionPointerReturnAppPtr((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
 	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
-
 	#undef UNUSED
 }
 #endif
