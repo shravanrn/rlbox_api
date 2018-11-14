@@ -1,3 +1,6 @@
+#ifndef RLBOX_API_NACL
+#define RLBOX_API_NACL
+
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <stdio.h>
@@ -402,8 +405,9 @@ public:
 			abort();
 		#elif defined(_M_X64) || defined(__x86_64__)
 			//32 bit mask
-			uintptr_t mask = ((uintptr_t)exampleUnsandboxedPtr) & 0xFFFFFFFF00000000;
 			uintptr_t suffix = ((uintptr_t)p) & 0xFFFFFFFF;
+			if(suffix == 0) { return 0; }
+			uintptr_t mask = ((uintptr_t)exampleUnsandboxedPtr) & 0xFFFFFFFF00000000;
 			uintptr_t ret = mask | suffix;
 			return (void*) ret;
 		#else
@@ -538,3 +542,5 @@ public:
 #endif
 
 #undef ENABLE_IF
+
+#endif

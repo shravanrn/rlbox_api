@@ -104,11 +104,11 @@ public:
 	{
 		tainted<int**, TSandbox> pa = nullptr;
 		pa = nullptr;
-		tainted<int**, TSandbox> pb = 0;
-		pb = 0;
+		tainted<int**, TSandbox> pb = nullptr;
+		pb = nullptr;
 
 		tainted<int***, TSandbox> pc = sandbox->template mallocInSandbox<int**>();
-		*pc = 0;
+		*pc = nullptr;
 		pb = *pc;
 
 		tainted<void**, TSandbox> pv = sandbox->template mallocInSandbox<void*>();
@@ -116,6 +116,16 @@ public:
 
 		tainted<testStruct*, TSandbox> ps = sandbox->template mallocInSandbox<testStruct>();
 		ps->voidPtr = nullptr;
+	}
+
+	void testVolatilePtrToTaintedPtrConversions()
+	{
+		tainted<testStruct*, TSandbox> ps = sandbox->template mallocInSandbox<testStruct>();
+
+		tainted_volatile<void*, TSandbox>& psref = ps->voidPtr;
+		tainted<void**, TSandbox> psCopy = &psref;
+		ps->voidPtr = psCopy;
+		ps->voidPtr = &psref;
 	}
 
 	void testPointerNullChecks()
@@ -177,6 +187,22 @@ public:
 		ENSURE(result2 == 5);
 	}
 
+	void testEnumVerificationFunction()
+	{
+		typedef enum {
+			ENUM_UNKNOWN,
+			ENUM_FIRST,
+			ENUM_SECOND,
+			ENUM_THIRD
+		} Example_Enum;
+
+		tainted<Example_Enum, TSandbox> ref;
+		auto enumVal = ref.copyAndVerify([](Example_Enum val){
+			return val <= ENUM_THIRD? val : ENUM_UNKNOWN;
+		});
+		UNUSED(enumVal);
+	}
+
 	void testPointerVerificationFunctionFormats()
 	{
 		tainted<int*, TSandbox> pa = sandbox->template mallocInSandbox<int>();
@@ -228,13 +254,12 @@ public:
 
 	void testInternalCallback()
 	{
+		// auto fnPtr = sandbox_function(sandbox, internalCallback);
+
 		// tainted<testStruct*, TSandbox> pFoo = sandbox->template mallocInSandbox<testStruct>();
+		// pFoo->fieldFnPtr = fnPtr;
 
-		// auto fnPtr = (decltype(internalCallback)*) sandbox->getFunctionPointerFromCache("internalCallback");
-		// auto convFnPtr = sandbox_convertToUnverified<decltype(internalCallback)*>(sandbox, fnPtr);
-		// pFoo->fieldFnPtr = convFnPtr;
-
-		// auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), convFnPtr);
+		// auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), fnPtr);
 		// auto result = resultT
 		// 	.copyAndVerify([](int val){ return val > 0 && val < 100? val : -1; });
 		// ENSURE(result == 10);
@@ -503,6 +528,7 @@ public:
 		testBinaryOperators();
 		testDerefOperators();
 		testPointerAssignments();
+		testVolatilePtrToTaintedPtrConversions();
 		testVolatileDerefOperator();
 		testAddressOfOperators();
 		testAppPointer();
@@ -510,6 +536,7 @@ public:
 		testPointerNullChecks();
 		test64BitReturns();
 		testTwoVerificationFunctionFormats();
+		testEnumVerificationFunction();
 		testPointerVerificationFunctionFormats();
 		testStackAndHeapArrAndStringParams();
 		testCallback();

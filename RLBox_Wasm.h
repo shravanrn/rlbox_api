@@ -1,3 +1,6 @@
+#ifndef RLBOX_API_WASM
+#define RLBOX_API_WASM
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <map>
@@ -208,3 +211,5 @@ public:
 };
 
 std::vector<WasmSandbox*> RLBox_Wasm::sandboxList __attribute__((weak));
+
+#endif

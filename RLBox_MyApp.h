@@ -1,3 +1,6 @@
+#ifndef RLBOX_API_MYAPP
+#define RLBOX_API_MYAPP
+
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <stdio.h>
@@ -203,3 +206,5 @@ __attribute__((weak))
 thread_local RLBox_MyApp* RLBox_MyApp::dynLib_SavedState = nullptr;
 
 #undef ENABLE_IF
+
+#endif

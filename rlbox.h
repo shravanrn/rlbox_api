@@ -95,7 +95,7 @@ namespace rlbox
 	constexpr bool my_is_union_v = std::is_union<T>::value;
 
 	template<typename T>
-	constexpr bool my_is_fundamental_v = std::is_fundamental<T>::value;
+	constexpr bool my_is_fundamental_or_enum_v = std::is_fundamental<T>::value || std::is_enum<T>::value;
 
 	template<typename T1, typename T2>
 	constexpr bool my_is_base_of_v = std::is_base_of<T1, T2>::value;
@@ -414,7 +414,7 @@ namespace rlbox
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	template <typename T, typename TSandbox>
-	inline my_enable_if_t<my_is_fundamental_v<T>,
+	inline my_enable_if_t<my_is_fundamental_or_enum_v<T>,
 	tainted<T, TSandbox>> sandbox_convertToUnverified(RLBoxSandbox<TSandbox>* sandbox, T retRaw)
 	{
 		//primitives are returned by value
@@ -553,7 +553,7 @@ namespace rlbox
 		//we explicitly disable this constructor if it has one of the signatures above, 
 		//	so that we give the above constructors a higher priority
 		//	For now we only allow this for fundamental types as this is potentially unsafe for pointers and structs
-		template<typename Arg, typename... Args, ENABLE_IF(!my_is_base_of_v<tainted_base<T, TSandbox>, my_remove_reference_t<Arg>> && my_is_fundamental_v<T>)>
+		template<typename Arg, typename... Args, ENABLE_IF(!my_is_base_of_v<tainted_base<T, TSandbox>, my_remove_reference_t<Arg>> && my_is_fundamental_or_enum_v<T>)>
 		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) { }
 
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
@@ -654,13 +654,13 @@ namespace rlbox
 			field = pointerVal;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			return verifyFunction(UNSAFE_Unverified());
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			return verifyFunction(UNSAFE_Unverified()) == RLBox_Verify_Status::SAFE? field : defaultValue;
@@ -758,7 +758,7 @@ namespace rlbox
 			return ret;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted<T, TSandbox>& operator=(const TRHS& arg) noexcept
 		{
 			field = arg;
@@ -819,29 +819,29 @@ namespace rlbox
 
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
-			tainted<T, TSandbox> result = - UNSAFE_Unverified();
-			return result;
+			auto result = - UNSAFE_Unverified();
+			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = UNSAFE_Unverified() + unwrap(rhs);
-			return result;
+			auto result = UNSAFE_Unverified() + unwrap(rhs);
+			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = UNSAFE_Unverified() - unwrap(rhs);
-			return result;
+			auto result = UNSAFE_Unverified() - unwrap(rhs);
+			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = UNSAFE_Unverified() * unwrap(rhs);
-			return result;
+			auto result = UNSAFE_Unverified() * unwrap(rhs);
+			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		inline tainted<T, TSandbox> getPointerIncrement(RLBoxSandbox<TSandbox>* sandbox, size_t size) const noexcept
@@ -959,13 +959,13 @@ namespace rlbox
 			field = (T) sandbox->getSandboxedPointer((void*) pointerVal);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			return verifyFunction(UNSAFE_Unverified());
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_v<T2>)>
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			return verifyFunction(UNSAFE_Unverified()) == RLBox_Verify_Status::SAFE? field : defaultValue;
@@ -1082,7 +1082,7 @@ namespace rlbox
 			return ret;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_fundamental_v<T> && my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const TRHS& arg) noexcept
 		{
 			assignField(arg);
@@ -1105,7 +1105,7 @@ namespace rlbox
 			return *this;
 		}
 
-		template<typename TRHS, ENABLE_IF(!my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted<TRHS, TSandbox>& arg) noexcept
 		{
 			auto val = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
@@ -1160,29 +1160,29 @@ namespace rlbox
 
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
-			tainted<T, TSandbox> result = - UNSAFE_Unverified();
-			return result;
+			auto result = - UNSAFE_Unverified();
+			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = UNSAFE_Unverified() + unwrap(rhs);
-			return result;
+			auto result = UNSAFE_Unverified() + unwrap(rhs);
+			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = UNSAFE_Unverified() - unwrap(rhs);
-			return result;
+			auto result = UNSAFE_Unverified() - unwrap(rhs);
+			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
-			tainted<T, TSandbox> result = UNSAFE_Unverified() * unwrap(rhs);
-			return result;
+			auto result = UNSAFE_Unverified() * unwrap(rhs);
+			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
@@ -1246,6 +1246,11 @@ namespace rlbox
 			return verifyFunction(*this); \
 		} \
 		\
+		inline tainted<T*, TSandbox> operator&() const noexcept \
+		{ \
+			auto structAddr = (T*)this; \
+			return *((tainted<T*, TSandbox>*)&structAddr); \
+		} \
 	};\
 	template<> \
 	class tainted<T, TSandbox> \
@@ -1316,7 +1321,6 @@ namespace rlbox
 		return arg.UNSAFE_Sandboxed(sandbox);
 	}
 
-
 	template <typename TSandbox, typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
 	inline T sandbox_removeWrapperUnsandboxed(RLBoxSandbox<TSandbox>* sandbox, T& arg)
 	{
@@ -1355,10 +1359,10 @@ namespace rlbox
 	template<typename TSandbox, typename TArg>
 	std::true_type sandbox_callback_is_arg_tainted_helper(tainted<TArg ,TSandbox>);
 
-	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_v<TArg>)>
+	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_or_enum_v<TArg>)>
 	std::true_type sandbox_callback_is_arg_tainted_helper(TArg);
 
-	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_v<TArg>)>
+	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_or_enum_v<TArg>)>
 	std::false_type sandbox_callback_is_arg_tainted_helper(TArg);
 
 	template <typename TSandbox, typename TArg>
@@ -1368,7 +1372,7 @@ namespace rlbox
 	using sandbox_callback_all_args_are_tainted = and_<sandbox_callback_is_arg_tainted<TSandbox, TArgs>::value...>;
 
 	template <typename... Args>
-	using sandbox_function_have_all_args_fundamental_or_wrapped = and_<(my_is_base_of_v<sandbox_wrapper_base, my_remove_reference_t<Args>> || my_is_fundamental_v<my_remove_reference_t<Args>>)...>;
+	using sandbox_function_have_all_args_fundamental_or_wrapped = and_<(my_is_base_of_v<sandbox_wrapper_base, my_remove_reference_t<Args>> || my_is_fundamental_or_enum_v<my_remove_reference_t<Args>>)...>;
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1595,16 +1599,17 @@ namespace rlbox
 	};
 
 	template<typename TLHS, typename TRHS, typename TSandbox, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>> && my_is_pointer_v<TLHS> && my_is_pointer_v<TRHS>)>
-	inline tainted<TLHS, TSandbox> sandbox_reinterpret_cast(const TWrap<TRHS, TSandbox> rhs) noexcept
+	inline tainted<TLHS, TSandbox> sandbox_reinterpret_cast(const TWrap<TRHS, TSandbox>& rhs) noexcept
 	{
-		auto ptr = &rhs;
-		auto pret = (tainted<TLHS, TSandbox>*) ptr;
+		tainted<TRHS, TSandbox> taintedVal = rhs;
+		auto pret = (tainted<TLHS, TSandbox>*) &taintedVal;
 		return *pret;
 	}
 
 	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
 	#define sandbox_invoke_return_app_ptr(sandbox, fnName, ...) sandbox->invokeWithFunctionPointerReturnAppPtr((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
 	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
+	#define sandbox_function(sandbox, fnName) sandbox_convertToUnverified<decltype(fnName)*>(sandbox, (decltype(fnName)*) sandbox->getFunctionPointerFromCache(#fnName))
 	#undef UNUSED
 }
 #endif
