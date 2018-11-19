@@ -13,6 +13,7 @@
 #include <functional>
 #include <type_traits>
 #include <map>
+#include <mutex>
 #include <string.h>
 #include <cstdint>
 
