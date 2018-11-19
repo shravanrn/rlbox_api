@@ -19,7 +19,7 @@
 #define sandbox_fields_reflection_testlib_class_frozenStruct(f, g, ...) \
 	f(int, normalField, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(int, fieldForFreeze, FIELD_FROZEN, ##__VA_ARGS__) \
+	f(int, fieldForFreeze, FIELD_FREEZABLE, ##__VA_ARGS__) \
 	g() \
 	f(struct frozenStructTest*, next, FIELD_NORMAL, ##__VA_ARGS__) \
 	g()

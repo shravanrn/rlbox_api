@@ -473,7 +473,7 @@ public:
 
 	void testFrozenValues()
 	{
-		tainted_frozen<int*, TSandbox> pfa = sandbox->template mallocFrozenInSandbox<int>();
+		tainted_freezable<int*, TSandbox> pfa = sandbox->template mallocFrozenInSandbox<int>();
 		*pfa = 42;
 
 		tainted<int*, TSandbox> pa = sandbox->template mallocInSandbox<int>();
