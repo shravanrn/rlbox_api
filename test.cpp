@@ -471,6 +471,56 @@ public:
 		);
 	}
 
+	void testFrozenValues()
+	{
+		tainted_frozen<int*, TSandbox> pfa = sandbox->template mallocFrozenInSandbox<int>();
+		*pfa = 42;
+
+		tainted<int*, TSandbox> pa = sandbox->template mallocInSandbox<int>();
+		*pa = *pfa;
+
+		pfa->freeze();
+
+		auto ret = pfa->copyAndVerify([](int val) { return val; });
+		ENSURE(ret == 42);
+
+		pfa->unfreeze();
+		pfa->freeze();
+
+		tainted<int, TSandbox> taintedCopy;
+		taintedCopy = *pfa;
+		auto ret2 = taintedCopy.copyAndVerify([](int val) { return val; });
+		ENSURE(ret2 == 42);
+
+		tainted<int, TSandbox> a = *pfa;
+		ENSURE(a.UNSAFE_Unverified() == 42);
+
+		pfa->unfreeze();
+
+		sandbox->template freeInSandbox(pa);
+		sandbox->template freeInSandbox(pfa);
+	}
+
+	void testFrozenStructs() {
+		tainted<struct frozenStruct*, TSandbox> pa = sandbox->template mallocInSandbox<struct frozenStruct>();
+		pa->normalField = 1;
+		pa->fieldForFreeze = 2;
+
+		//The following would be an error as we are performing computation on a frozen type without freezing
+		//tainted<int, TSandbox> temp = pa->fieldForFreeze + 1;
+		pa->fieldForFreeze.freeze();
+
+		sandbox_invoke(sandbox, simplePointerWrite, &(pa->fieldForFreeze), pa->fieldForFreeze + 1);
+		//read here would be an error as there is a new value at the location
+		pa->fieldForFreeze.freeze();
+
+		auto normalFieldVal = pa->normalField.UNSAFE_Unverified();
+		auto frozenFieldVal = pa->fieldForFreeze.UNSAFE_Unverified();
+
+		ENSURE(normalFieldVal == 1);
+		UNUSED(frozenFieldVal == 2);
+	}
+
 	void testStructWithBadPtr()
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructValBadPtr);
@@ -551,6 +601,8 @@ public:
 		testAppPtrFunctionReturn();
 		testPointersInStruct();
 		test32BitPointerEdgeCases();
+		testFrozenValues();
+		testFrozenStructs();
 	}
 
 	void runBadPointersTest()

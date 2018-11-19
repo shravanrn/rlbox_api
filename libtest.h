@@ -15,6 +15,13 @@ extern "C" {
         CallbackType fnArray[4];
     };
 
+    struct frozenStruct
+    {
+        int normalField;
+        int fieldForFreeze;
+        struct frozenStructTest* next;
+    };
+
     struct pointersStruct
     {
         char* firstPointer;
@@ -40,4 +47,5 @@ extern "C" {
     struct pointersStruct initializePointerStruct(char* initVal);
     struct pointersStruct* initializePointerStructPtr(char* initVal);
     int internalCallback(unsigned, const char*, unsigned[1]);
+    void simplePointerWrite(int* ptr, int val);
 }

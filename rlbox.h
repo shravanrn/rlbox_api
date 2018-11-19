@@ -46,6 +46,9 @@ namespace rlbox_detail {
 	
 }
 
+#define FIELD_NORMAL 0
+#define FIELD_FROZEN 1
+
 namespace rlbox
 {
 	//https://stackoverflow.com/questions/19532475/casting-a-variadic-parameter-pack-to-void
@@ -215,6 +218,12 @@ namespace rlbox
 
 	template<typename T, typename TSandbox>
 	class tainted_volatile;
+
+	template<typename T, typename TSandbox>
+	class tainted_frozen;
+
+	template<typename T, typename TSandbox>
+	class tainted_frozen_volatile;
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -489,6 +498,18 @@ namespace rlbox
 	{
 	};
 
+	template<typename TRHS, typename TSandbox, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
+	inline TRHS rlboxUnwrapOrReturnValue(const TWrap<TRHS, TSandbox> rhs) noexcept
+	{
+		return rhs.UNSAFE_Unverified();
+	}
+
+	template<typename TRHS>
+	inline TRHS rlboxUnwrapOrReturnValue(const TRHS rhs) noexcept
+	{
+		return rhs;
+	}
+
 	template<typename T, typename TSandbox>
 	class tainted : public tainted_base<T, TSandbox>
 	{
@@ -500,23 +521,19 @@ namespace rlbox
 		template <typename U1, typename U2>
 		friend class tainted_volatile;
 
+		//make sure tainted_frozen<T1> can access private members of tainted<T2>
+		template <typename U1, typename U2>
+		friend class tainted_frozen;
+
+		//make sure tainted_frozen_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U1, typename U2>
+		friend class tainted_frozen_volatile;
+
 		template<typename U>
 		friend class RLBoxSandbox;
 
 	private:
 		T field;
-
-		template<typename TRHS, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
-		inline TRHS unwrap(const TWrap<TRHS, TSandbox> rhs) const noexcept
-		{
-			return rhs.UNSAFE_Unverified();
-		}
-
-		template<typename TRHS>
-		inline TRHS unwrap(const TRHS rhs) const noexcept
-		{
-			return rhs;
-		}
 
 	public:
 
@@ -548,6 +565,11 @@ namespace rlbox
 		tainted(const std::nullptr_t& arg)
 		{
 			field = arg;
+		}
+
+		tainted(const tainted_frozen_volatile<T, TSandbox>& p)
+		{
+			field = p.UNSAFE_Unverified();
 		}
 
 		//we explicitly disable this constructor if it has one of the signatures above, 
@@ -779,6 +801,22 @@ namespace rlbox
 			return *this;
 		}
 
+		//we only allow tainted assignment from tainted_frozen if its a simple type
+		//allowing pointers would let users write buggy patterns in code
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS> && my_is_fundamental_or_enum_v<T>)>
+		inline tainted<T, TSandbox>& operator=(const tainted_frozen<TRHS, TSandbox>& arg) noexcept
+		{
+			field = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
+			return *this;
+		}
+
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		inline tainted<T, TSandbox>& operator=(const tainted_frozen_volatile<TRHS, TSandbox>& arg) noexcept
+		{
+			field = arg.UNSAFE_Unverified();
+			return *this;
+		}
+
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox>& operator=(const std::nullptr_t& arg) noexcept
 		{
@@ -826,21 +864,21 @@ namespace rlbox
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
-			auto result = UNSAFE_Unverified() + unwrap(rhs);
+			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
-			auto result = UNSAFE_Unverified() - unwrap(rhs);
+			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
-			auto result = UNSAFE_Unverified() * unwrap(rhs);
+			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
@@ -879,6 +917,14 @@ namespace rlbox
 		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
 		template <typename U1, typename U2>
 		friend class tainted_volatile;
+
+		//make sure tainted_frozen<T1> can access private members of tainted<T2>
+		template <typename U1, typename U2>
+		friend class tainted_frozen;
+
+		//make sure tainted_frozen_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U1, typename U2>
+		friend class tainted_frozen_volatile;
 
 	private:
 		my_add_volatile_t<T> field;
@@ -1113,6 +1159,23 @@ namespace rlbox
 			return *this;
 		}
 
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		inline tainted_volatile<T, TSandbox>& operator=(const tainted_frozen<TRHS, TSandbox>& arg) noexcept
+		{
+			auto val = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
+			assignField(val);
+			return *this;
+		}
+
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		inline tainted_volatile<T, TSandbox>& operator=(const tainted_frozen_volatile<TRHS, TSandbox>& arg) noexcept
+		{
+			//Avoid freeze check as we writing into sandboxed memory anyway
+			auto val = arg.UNSAFE_SandboxedNoFreezeCheck();
+			assignField(val);
+			return *this;
+		}
+
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const std::nullptr_t& arg) noexcept
 		{
@@ -1167,21 +1230,21 @@ namespace rlbox
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
-			auto result = UNSAFE_Unverified() + unwrap(rhs);
+			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
-			auto result = UNSAFE_Unverified() - unwrap(rhs);
+			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
 		template<typename TRHS>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
-			auto result = UNSAFE_Unverified() * unwrap(rhs);
+			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
@@ -1214,13 +1277,282 @@ namespace rlbox
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	#define helper_tainted_createField(fieldType, fieldName, TSandbox) tainted<fieldType, TSandbox> fieldName;
-	#define helper_tainted_volatile_createField(fieldType, fieldName, TSandbox) tainted_volatile<fieldType, TSandbox> fieldName;
+	template<typename T, typename TSandbox>
+	class tainted_frozen_base : public sandbox_wrapper_base, public sandbox_wrapper_base_of<T>
+	{
+	};
+
+	template<typename T, typename TSandbox>
+	class tainted_frozen : public tainted_frozen_base<T, TSandbox>
+	{
+		static_assert(my_is_pointer_v<T>, "Tainted frozen expected a pointer");
+
+		//make sure tainted<T1> can access private members of tainted<T2>
+		template <typename U1, typename U2>
+		friend class tainted;
+
+		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U1, typename U2>
+		friend class tainted_volatile;
+
+		//make sure tainted_frozen<T1> can access private members of tainted<T2>
+		template <typename U1, typename U2>
+		friend class tainted_frozen;
+
+		//make sure tainted_frozen_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U1, typename U2>
+		friend class tainted_frozen_volatile;
+
+		template<typename U>
+		friend class RLBoxSandbox;
+
+	private:
+		T field;
+
+	public:
+
+		tainted_frozen() = default;
+		tainted_frozen(const tainted_frozen<T, TSandbox>& p) = default;
+
+		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
+		{
+			return field;
+		}
+
+		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
+		{
+			return (T) sandbox->getSandboxedPointer((void*)field);
+		}
+
+		//Non class pointers - one level pointers
+		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
+		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<my_remove_pointer_or_valid_return_t<T>(T)> verifyFunction) const
+		{
+			auto maskedFieldPtr = UNSAFE_Unverified();
+			if(maskedFieldPtr == nullptr)
+			{
+				return verifyFunction(nullptr);
+			}
+
+			my_remove_pointer_t<T> maskedField = *maskedFieldPtr;
+			return verifyFunction(&maskedField);
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted_frozen_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
+		{
+			auto& ret = *((tainted_frozen_volatile<my_remove_pointer_t<T>, TSandbox>*) field);
+			return ret;
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted_frozen_volatile<my_remove_pointer_t<T>, TSandbox>* operator->()
+		{
+			return (tainted_frozen_volatile<my_remove_pointer_t<T>, TSandbox>*) UNSAFE_Unverified();
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline bool operator==(const std::nullptr_t& arg) const
+		{
+			return field == arg;
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline bool operator!=(const std::nullptr_t& arg) const
+		{
+			return field != arg;
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline bool operator!() const
+		{
+			return field == nullptr;
+		}
+	};
+
+	template<typename T, typename TSandbox>
+	class tainted_frozen_volatile : public tainted_base<T, TSandbox>
+	{
+		// static_assert(my_is_fundamental_or_enum_v<T>, "Can only freeze simple values");
+
+		//make sure tainted<T1> can access private members of tainted<T2>
+		template <typename U1, typename U2>
+		friend class tainted;
+
+		//make sure tainted_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U1, typename U2>
+		friend class tainted_volatile;
+
+		//make sure tainted_frozen<T1> can access private members of tainted<T2>
+		template <typename U1, typename U2>
+		friend class tainted_frozen;
+
+		//make sure tainted_frozen_volatile<T1> can access private members of tainted_volatile<T2>
+		template <typename U1, typename U2>
+		friend class tainted_frozen_volatile;
+
+	private:
+		static std::map<void*, T> frozenList;
+
+		my_add_volatile_t<T> field;
+
+		tainted_frozen_volatile()
+		{
+			static_assert(my_is_fundamental_or_enum_v<T>, "Can only freeze simple values");
+		}
+		tainted_frozen_volatile(const tainted_frozen_volatile<T, TSandbox>& p) = default;
+
+		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		inline void assignField(TRHS& value)
+		{
+			auto it = frozenList.find((void*) &field);
+			if (it != frozenList.end()) {
+				it->second = value;
+			}
+			field = value;
+		}
+
+	public:
+
+		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
+		{
+			auto it = frozenList.find((void*) &field);
+			if (it == frozenList.end()) {
+				printf("Value not frozen before read at location : %p\n", (void*) &field);
+				abort();
+			}
+			auto value = it->second;
+			if (value != field) {
+				printf("Frozen Value changed before read at location : %p\n", (void*) &field);
+				abort();
+			}
+			return value;
+		}
+
+		inline my_decay_if_array_t<T> UNSAFE_UnverifiedNoFreezeCheck() const noexcept
+		{
+			return field;
+		}
+
+		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
+		{
+			return UNSAFE_Unverified();
+		}
+
+		inline my_decay_if_array_t<T> UNSAFE_SandboxedNoFreezeCheck() const noexcept
+		{
+			return field;
+		}
+
+		inline void freeze() noexcept
+		{
+			frozenList[(void*) &field] = field;
+		}
+
+		inline void unfreeze() noexcept
+		{
+			frozenList.erase((void*) &field);
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
+		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
+		{
+			return verifyFunction(UNSAFE_Unverified());
+		}
+
+		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
+		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
+		{
+			return verifyFunction(UNSAFE_Unverified()) == RLBox_Verify_Status::SAFE? field : defaultValue;
+		}
+
+		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
+		{
+		}
+
+		template<typename TRHS, ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
+		inline tainted_frozen_volatile<T, TSandbox>& operator=(const TRHS& arg) noexcept
+		{
+			assignField(arg);
+			return *this;
+		}
+
+		template<typename TRHS, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>> && my_is_assignable_v<T&, TRHS>)>
+		inline tainted_frozen_volatile<T, TSandbox>& operator=(const TWrap<TRHS, TSandbox>& arg) noexcept
+		{
+			auto val = arg.UNSAFE_Unverified();
+			assignField(val);
+			return *this;
+		}
+
+		inline tainted_frozen<T*, TSandbox> operator&() const noexcept
+		{
+			tainted_frozen<T*, TSandbox> ret;
+			// static_cast drops constness
+			ret.field = (T*) &field;
+			return ret;
+		}
+
+		inline operator tainted<T, TSandbox>() const 
+		{
+			auto result = UNSAFE_Unverified();
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
+		inline tainted<T, TSandbox> operator-() const noexcept
+		{
+			auto result = - UNSAFE_Unverified();
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
+		template<typename TRHS>
+		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
+		{
+			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
+		template<typename TRHS>
+		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
+		{
+			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
+		template<typename TRHS>
+		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
+		{
+			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
+			return *((tainted<T, TSandbox>*) &result);
+		}
+	};
+
+	template<typename T, typename TSandbox>
+	std::map<void*, T> tainted_frozen_volatile<T, TSandbox>::frozenList __attribute__((weak));
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<typename T, typename TSandbox>
+	tainted<T, TSandbox> convertToTaintedField(const tainted_volatile<T, TSandbox>& field)
+	{
+		tainted<T, TSandbox> temp = field;
+		return temp;
+	}
+
+	template<typename T, typename TSandbox>
+	tainted<T, TSandbox> convertToTaintedField(const tainted_frozen_volatile<T, TSandbox>& field)
+	{
+		tainted<T, TSandbox> temp = field.UNSAFE_Unverified();
+		return temp;
+	}
+
+	#define helper_tainted_createField(fieldType, fieldName, isFrozen, TSandbox) tainted<fieldType, TSandbox> fieldName;
+	#define helper_tainted_volatile_createField(fieldType, fieldName, isFrozen, TSandbox) my_conditional_t<isFrozen == 0, tainted_volatile<fieldType, TSandbox>, tainted_frozen_volatile<fieldType, TSandbox>> fieldName;
 	#define helper_noOp()
-	#define helper_fieldInit(fieldType, fieldName, TSandbox) fieldName = p.fieldName;
-	#define helper_fieldCopy(fieldType, fieldName, TSandbox) { tainted<fieldType, TSandbox> temp = fieldName; memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
-	#define helper_fieldCopyUnsandbox(fieldType, fieldName, TSandbox) { auto temp = fieldName.UNSAFE_Sandboxed(sandbox); memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
-	#define helper_fieldUnsandbox(fieldType, fieldName, TSandbox) fieldName.unsandboxPointersOrNull(sandbox);
+	#define helper_fieldInit(fieldType, fieldName, isFrozen, TSandbox) fieldName = p.fieldName;
+	#define helper_fieldCopy(fieldType, fieldName, isFrozen, TSandbox) { tainted<fieldType, TSandbox> temp = convertToTaintedField(fieldName); memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
+	#define helper_fieldCopyUnsandbox(fieldType, fieldName, isFrozen, TSandbox) { auto temp = fieldName.UNSAFE_Sandboxed(sandbox); memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
+	#define helper_fieldUnsandbox(fieldType, fieldName, isFrozen, TSandbox) fieldName.unsandboxPointersOrNull(sandbox);
 
 	#define tainted_data_specialization(T, libId, TSandbox) \
 	template<> \
@@ -1321,6 +1653,12 @@ namespace rlbox
 		return arg.UNSAFE_Sandboxed(sandbox);
 	}
 
+	template<typename TSandbox, typename TRHS, typename... TRHSRem>
+	inline auto sandbox_removeWrapper(RLBoxSandbox<TSandbox>* sandbox, const tainted_frozen_volatile<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_SandboxedNoFreezeCheck())
+	{
+		return arg.UNSAFE_SandboxedNoFreezeCheck();
+	}
+
 	template <typename TSandbox, typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
 	inline T sandbox_removeWrapperUnsandboxed(RLBoxSandbox<TSandbox>* sandbox, T& arg)
 	{
@@ -1332,6 +1670,13 @@ namespace rlbox
 	{
 		return arg.UNSAFE_Unverified();
 	}
+
+	template<typename TSandbox, typename TRHS, typename... TRHSRem>
+	inline auto sandbox_removeWrapperUnsandboxed(RLBoxSandbox<TSandbox>* sandbox, const tainted_frozen_volatile<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_SandboxedNoFreezeCheck())
+	{
+		return arg.UNSAFE_UnverifiedNoFreezeCheck();
+	}
+
 
 	template<class TData> 
 	class tainted_unwrapper {
@@ -1404,9 +1749,29 @@ namespace rlbox
 			return ret;
 		}
 
+		template<typename T>
+		tainted_frozen<T*, TSandbox> mallocFrozenInSandbox()
+		{
+			void* addr = this->impl_mallocInSandbox(sizeof(T));
+			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr), false /* isFuncPtr */))
+			{
+				abort();
+			}
+			tainted_frozen<T*, TSandbox> ret;
+			ret.field = static_cast<T*>(addr);
+			return ret;
+		}
+
 		template <typename T, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, T>)>
 		void freeInSandbox(T val)
 		{
+			return this->impl_freeInSandbox(val.UNSAFE_Unverified());
+		}
+
+		template <typename T>
+		void freeInSandbox(tainted_frozen<T*, TSandbox> val)
+		{
+			val->unfreeze();
 			return this->impl_freeInSandbox(val.UNSAFE_Unverified());
 		}
 

@@ -152,3 +152,7 @@ int internalCallback(unsigned a, const char* b, unsigned c[1])
 {
 	return a + strlen(b);
 }
+
+void simplePointerWrite(int* ptr, int val) {
+	*ptr = val;
+}

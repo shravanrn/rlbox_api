@@ -1,29 +1,38 @@
 #define sandbox_fields_reflection_testlib_class_testStruct(f, g, ...) \
-	f(unsigned long, fieldLong, ##__VA_ARGS__) \
+	f(unsigned long, fieldLong, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(const char*, fieldString, ##__VA_ARGS__) \
+	f(const char*, fieldString, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(unsigned int, fieldBool, ##__VA_ARGS__) \
+	f(unsigned int, fieldBool, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(char[8], fieldFixedArr, ##__VA_ARGS__) \
+	f(char[8], fieldFixedArr, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(int (*)(unsigned, const char*, unsigned[1]), fieldFnPtr, ##__VA_ARGS__) \
+	f(int (*)(unsigned, const char*, unsigned[1]), fieldFnPtr, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(struct unknownClass*, fieldUnknownPtr, ##__VA_ARGS__) \
+	f(struct unknownClass*, fieldUnknownPtr, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(void*, voidPtr, ##__VA_ARGS__) \
+	f(void*, voidPtr, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(int (*[4])(unsigned, const char*, unsigned[1]), fnArray, ##__VA_ARGS__) \
+	f(int (*[4])(unsigned, const char*, unsigned[1]), fnArray, FIELD_NORMAL, ##__VA_ARGS__) \
+	g()
+
+#define sandbox_fields_reflection_testlib_class_frozenStruct(f, g, ...) \
+	f(int, normalField, FIELD_NORMAL, ##__VA_ARGS__) \
+	g() \
+	f(int, fieldForFreeze, FIELD_FROZEN, ##__VA_ARGS__) \
+	g() \
+	f(struct frozenStructTest*, next, FIELD_NORMAL, ##__VA_ARGS__) \
 	g()
 
 #define sandbox_fields_reflection_testlib_class_pointersStruct(f, g, ...) \
-	f(char*, firstPointer, ##__VA_ARGS__) \
+	f(char*, firstPointer, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(char*[4], pointerArray, ##__VA_ARGS__) \
+	f(char*[4], pointerArray, FIELD_NORMAL, ##__VA_ARGS__) \
 	g() \
-	f(char*, lastPointer, ##__VA_ARGS__) \
+	f(char*, lastPointer, FIELD_NORMAL, ##__VA_ARGS__) \
 	g()
 
 #define sandbox_fields_reflection_testlib_allClasses(f, ...) \
 	f(testStruct, testlib, ##__VA_ARGS__) \
+	f(frozenStruct, testlib, ##__VA_ARGS__) \
 	f(pointersStruct, testlib, ##__VA_ARGS__)
