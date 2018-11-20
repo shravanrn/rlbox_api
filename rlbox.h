@@ -15,7 +15,7 @@
 #include <map>
 #include <string.h>
 #include <cstdint>
-
+#include <mutex>
 
 namespace rlbox_detail {
 	//https://en.wikibooks.org/wiki/More_C++_Idioms/Member_Detector
@@ -855,27 +855,28 @@ namespace rlbox
 			return field == nullptr;
 		}
 
+		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
 			auto result = - UNSAFE_Unverified();
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
@@ -1221,27 +1222,28 @@ namespace rlbox
 			return fieldCopy;
 		}
 
+		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
 			auto result = - UNSAFE_Unverified();
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
@@ -1392,6 +1394,7 @@ namespace rlbox
 		friend class tainted_freezable_volatile;
 
 	private:
+		static std::mutex frozenListLock;
 		static std::map<void*, T> frozenList;
 
 		my_add_volatile_t<T> field;
@@ -1405,6 +1408,7 @@ namespace rlbox
 		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline void assignField(TRHS& value)
 		{
+			std::lock_guard<std::mutex> lock(frozenListLock);
 			auto it = frozenList.find((void*) &field);
 			if (it != frozenList.end()) {
 				it->second = value;
@@ -1416,6 +1420,7 @@ namespace rlbox
 
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
 		{
+			std::lock_guard<std::mutex> lock(frozenListLock);
 			auto it = frozenList.find((void*) &field);
 			if (it == frozenList.end()) {
 				printf("Value not frozen before read at location : %p\n", (void*) &field);
@@ -1446,11 +1451,13 @@ namespace rlbox
 
 		inline void freeze() noexcept
 		{
+			std::lock_guard<std::mutex> lock(frozenListLock);
 			frozenList[(void*) &field] = field;
 		}
 
 		inline void unfreeze() noexcept
 		{
+			std::lock_guard<std::mutex> lock(frozenListLock);
 			frozenList.erase((void*) &field);
 		}
 
@@ -1499,33 +1506,37 @@ namespace rlbox
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
+		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
 			auto result = - UNSAFE_Unverified();
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename TRHS>
+		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 	};
+
+	template<typename T, typename TSandbox>
+	std::mutex tainted_freezable_volatile<T, TSandbox>::frozenListLock __attribute__((weak));
 
 	template<typename T, typename TSandbox>
 	std::map<void*, T> tainted_freezable_volatile<T, TSandbox>::frozenList __attribute__((weak));
