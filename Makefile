@@ -76,7 +76,7 @@ SHELL=/bin/bash
 out/x64/libwasm_test.so: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 		source $(EMSDK_DIR)/emsdk_env.sh && \
 		emcc -std=c++11 $(CFLAGS) -O0 $(CURDIR)/libtest.cpp -c -o ./out/x64/libwasm_test.o && \
-		$(call convert_to_wasm, ./out/x64/libwasm_test.o, ./out/x64/libwasm_test.js, -std=c++11)
+		$(call convert_to_wasm,$(abspath ./out/x64/libwasm_test.o),$(abspath ./out/x64/libwasm_test.js),-std=c++11)
 endif
 
 build: out/x32/test out/x64/test out/x32/libtest.so out/x64/libtest.so out/x32/libtest.nexe out/x64/libtest.nexe out/x64/libwasm_test.so
