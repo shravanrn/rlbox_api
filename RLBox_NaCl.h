@@ -364,7 +364,7 @@ public:
 		#else
 			#error Unsupported platform!
 		#endif
-		return (char*)impl_GetUnsandboxedPointer((void*)sboxMem, false /* isFuncPtr */);
+		return (char*)impl_GetUnsandboxedPointer((void*)sboxMem);
 	}
 
 	inline void* impl_pushStackArr(size_t size)
@@ -388,7 +388,8 @@ public:
 
 	//Nice trick to sandbox and unsandbox pointers without knowing a reference to the sandbox
 	//Gain the sandbox memory's base address from the address of the pointer itself, since the pointer val
-	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr, bool isFuncPtr)
+	template<typename T>
+	static inline T* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
 			for(NaClSandbox* sandbox : sandboxList)
@@ -398,7 +399,7 @@ public:
 				uintptr_t exampleVal = (uintptr_t)exampleUnsandboxedPtr;
 				if(exampleVal >= base && exampleVal < (base + memSize))
 				{
-					return (void*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
+					return (T*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
 				}
 			}
 			printf("Could not find sandbox for address: %p\n", p);
@@ -409,13 +410,14 @@ public:
 			if(suffix == 0) { return 0; }
 			uintptr_t mask = ((uintptr_t)exampleUnsandboxedPtr) & 0xFFFFFFFF00000000;
 			uintptr_t ret = mask | suffix;
-			return (void*) ret;
+			return (T*) ret;
 		#else
 			#error Unsupported platform!
 		#endif
 	}
 
-	static inline void* impl_GetSandboxedPointer(void* p, void* exampleUnsandboxedPtr)
+	template<typename T>
+	static inline T* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
 			for(NaClSandbox* sandbox : sandboxList)
@@ -425,7 +427,7 @@ public:
 				uintptr_t pVal = (uintptr_t)p;
 				if(pVal >= base && pVal < (base + memSize))
 				{
-					return (void*) getSandboxedAddress(sandbox, (uintptr_t)p);
+					return (T*) getSandboxedAddress(sandbox, (uintptr_t)p);
 				}
 			}
 			printf("Could not find sandbox for address: %p\n", p);
@@ -433,23 +435,26 @@ public:
 		#else
 			//32 bit mask
 			uintptr_t ret = ((uintptr_t)p) & 0xFFFFFFFF;
-			return (void*) ret;
+			return (T*) ret;
 		#endif
 	}
 
-	inline void* impl_GetUnsandboxedPointer(void* p, bool isFuncPtr)
+	template<typename T>
+	inline T* impl_GetUnsandboxedPointer(T* p)
 	{
-		auto ret = (void*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
+		auto ret = (T*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
 		return ret;
 	}
 	
-	inline void* impl_GetSandboxedPointer(void* p)
+	template<typename T>
+	inline T* impl_GetSandboxedPointer(T* p)
 	{
-		auto ret = (void*) getSandboxedAddress(sandbox, (uintptr_t)p);
+		auto ret = (T*) getSandboxedAddress(sandbox, (uintptr_t)p);
 		return ret;
 	}
 
-	inline bool impl_isValidSandboxedPointer(const void* p, bool isFuncPtr)
+	template<typename T>
+	inline bool impl_isValidSandboxedPointer(T* p)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
 			uintptr_t max = 1;

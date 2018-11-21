@@ -254,15 +254,15 @@ public:
 
 	void testInternalCallback()
 	{
-		// auto fnPtr = sandbox_function(sandbox, internalCallback);
+		auto fnPtr = sandbox_function(sandbox, internalCallback);
 
-		// tainted<testStruct*, TSandbox> pFoo = sandbox->template mallocInSandbox<testStruct>();
-		// pFoo->fieldFnPtr = fnPtr;
+		tainted<testStruct*, TSandbox> pFoo = sandbox->template mallocInSandbox<testStruct>();
+		pFoo->fieldFnPtr = fnPtr;
 
-		// auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), fnPtr);
-		// auto result = resultT
-		// 	.copyAndVerify([](int val){ return val > 0 && val < 100? val : -1; });
-		// ENSURE(result == 10);
+		auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), fnPtr);
+		auto result = resultT
+			.copyAndVerify([](int val){ return val > 0 && val < 100? val : -1; });
+		ENSURE(result == 10);
 	}
 
 	void testCallbackOnStruct()

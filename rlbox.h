@@ -300,7 +300,7 @@ namespace rlbox
 		}
 
 		inline T* UNSAFE_Unverified() const noexcept { return field; }
-		inline T* UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandboxP) const noexcept { return (T*) sandboxP->getSandboxedPointer((void*)field); }
+		inline T* UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandboxP) const noexcept { return (T*) sandboxP->getSandboxedPointer(field); }
 	};
 
 	template <typename T, typename TSandbox>
@@ -344,7 +344,7 @@ namespace rlbox
 		}
 
 		inline T* UNSAFE_Unverified() const noexcept { return field; }
-		inline T* UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandboxP) const noexcept { return (T*) sandboxP->getSandboxedPointer((void*)field); }
+		inline T* UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandboxP) const noexcept { return (T*) sandboxP->getSandboxedPointer(field); }
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -602,7 +602,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
 		{
-			return (T) sandbox->getSandboxedPointer((void*)field);
+			return (T) sandbox->getSandboxedPointer(field);
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2> && !(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>))>
@@ -613,14 +613,14 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
-			void** start = (void**) field;
-			void** end = (void**) (((uintptr_t)field) + sizeof(T));
+			void** start = reinterpret_cast<void**>(field);
+			void** end = (void**) (((uintptr_t)reinterpret_cast<void**>(field)) + sizeof(T));
 
 			for(void** curr = start; curr < end; curr = (void**) (((uintptr_t)curr) + sizeof(void*)))
 			{
-				if(sandbox->isValidSandboxedPointer(*curr, my_is_function_ptr_v<my_remove_extent_t<T>>))
+				if(sandbox->isValidSandboxedPointer((my_remove_extent_t<T>) *curr))
 				{
-					*curr = sandbox->getUnsandboxedPointer(*curr, my_is_function_ptr_v<my_remove_extent_t<T>>);
+					*curr = reinterpret_cast<void*>(sandbox->getUnsandboxedPointer((my_remove_extent_t<T>)*curr));
 				}
 				else
 				{
@@ -632,9 +632,9 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
-			void** start = (void**) field;
-			void** endRead = (void**) (((uintptr_t)field) + (sizeof(T)/2) - 4);
-			void** endWrite = (void**) (((uintptr_t)field) + sizeof(T) - 8);
+			void** start = (void**) reinterpret_cast<void**>(field);
+			void** endRead = (void**) (((uintptr_t)reinterpret_cast<void**>(field)) + (sizeof(T)/2) - 4);
+			void** endWrite = (void**) (((uintptr_t)reinterpret_cast<void**>(field)) + sizeof(T) - 8);
 
 			for(void **currRead = endRead, **currWrite = endWrite; 
 				currRead >= start; 
@@ -642,9 +642,9 @@ namespace rlbox
 			)
 			{
 				void* curr = (void*)(((uintptr_t)*currRead) & 0xFFFFFFFF);
-				if(sandbox->isValidSandboxedPointer(curr, my_is_function_ptr_v<my_remove_extent_t<T>>))
+				if(sandbox->isValidSandboxedPointer((my_remove_extent_t<T>) curr))
 				{
-					*currWrite = sandbox->getUnsandboxedPointer(curr, my_is_function_ptr_v<my_remove_extent_t<T>>);
+					*currWrite = reinterpret_cast<void*>(sandbox->getUnsandboxedPointer((my_remove_extent_t<T>) curr));
 				}
 				else
 				{
@@ -656,9 +656,9 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
-			if(sandbox->isValidSandboxedPointer((const void*)field, my_is_function_ptr_v<T>))
+			if(sandbox->isValidSandboxedPointer((T)field))
 			{
-				field = (T) sandbox->getUnsandboxedPointer((void*)field, my_is_function_ptr_v<T>);
+				field = (T) sandbox->getUnsandboxedPointer((T)field);
 			}
 			else
 			{
@@ -943,7 +943,7 @@ namespace rlbox
 		inline my_decay_if_array_t<T> getAppSwizzledValue(my_add_volatile_t<T> arg, void* exampleUnsandboxedPtr) const
 		{
 			// static_cast drops constness
-			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg, exampleUnsandboxedPtr, my_is_function_ptr_v<T>);
+			return (T) TSandbox::impl_GetUnsandboxedPointer(arg, exampleUnsandboxedPtr);
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
@@ -955,7 +955,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
-			return (T) TSandbox::impl_GetSandboxedPointer((void*)(arg), exampleUnsandboxedPtr);
+			return (T) TSandbox::impl_GetSandboxedPointer(arg, exampleUnsandboxedPtr);
 		}
 
 		template<typename TRHS, typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
@@ -1003,7 +1003,7 @@ namespace rlbox
 			{
 				abort();
 			}
-			field = (T) sandbox->getSandboxedPointer((void*) pointerVal);
+			field = (T) sandbox->getSandboxedPointer(pointerVal);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
@@ -1323,7 +1323,7 @@ namespace rlbox
 
 		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
 		{
-			return (T) sandbox->getSandboxedPointer((void*)field);
+			return (T) sandbox->getSandboxedPointer(field);
 		}
 
 		//Non class pointers - one level pointers
@@ -1751,7 +1751,7 @@ namespace rlbox
 		tainted<T*, TSandbox> mallocInSandbox(unsigned int count=1)
 		{
 			void* addr = this->impl_mallocInSandbox(sizeof(T) * count);
-			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr), false /* isFuncPtr */))
+			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr)))
 			{
 				abort();
 			}
@@ -1764,7 +1764,7 @@ namespace rlbox
 		tainted_freezable<T*, TSandbox> mallocFrozenInSandbox()
 		{
 			void* addr = this->impl_mallocInSandbox(sizeof(T));
-			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr), false /* isFuncPtr */))
+			if(!this->isValidSandboxedPointer(this->getSandboxedPointer(addr)))
 			{
 				abort();
 			}
@@ -1798,19 +1798,22 @@ namespace rlbox
 			return ret;
 		}
 
-		inline void* getSandboxedPointer(void* p)
+		template<typename T>
+		inline T* getSandboxedPointer(T* p)
 		{
 			return this->impl_GetSandboxedPointer(p);
 		}
 
-		inline void* getUnsandboxedPointer(void* p, bool isFuncPtr)
+		template<typename T>
+		inline T* getUnsandboxedPointer(T* p)
 		{
-			return this->impl_GetUnsandboxedPointer(p, isFuncPtr);
+			return this->impl_GetUnsandboxedPointer(p);
 		}
 
-		inline bool isValidSandboxedPointer(const void* p, bool isFuncPtr)
+		template<typename T>
+		inline bool isValidSandboxedPointer(T* p)
 		{
-			return this->impl_isValidSandboxedPointer(p, isFuncPtr);
+			return this->impl_isValidSandboxedPointer(p);
 		}
 
 		inline bool isPointerInSandboxMemoryOrNull(const void* p)

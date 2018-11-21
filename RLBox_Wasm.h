@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <map>
 #include <mutex>
+#include <type_traits>
 #include "wasm_sandbox.h"
 
 class RLBox_Wasm
@@ -37,6 +38,18 @@ private:
 		using fnType = TRet(*)(TArgs..., void*);
 		fnType fnPtr = (fnType)(uintptr_t) callbackStateC->fnPtr;
 		return fnPtr(params..., callbackStateC->originalState);
+	}
+
+	template<typename T, typename std::enable_if<std::is_function<T>::value>::type* = nullptr>
+	static T* impl_GetSandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
+	{
+		return sandbox->registerInternalCallback(ptr);
+	}
+
+	template<typename T, typename std::enable_if<!std::is_function<T>::value>::type* = nullptr>
+	static T* impl_GetSandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
+	{
+		return sandbox->getSandboxedPointer(ptr);
 	}
 
 public:
@@ -93,8 +106,10 @@ public:
 		return impl_freeInSandbox(ptr);
 	}
 
-	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr, bool isFuncPtr)
+	template<typename T>
+	static inline T* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
+		const bool isFuncPtr = std::is_function<T>::value;
 		for(WasmSandbox* sandbox : sandboxList)
 		{
 			size_t memSize = sandbox->getTotalMemory();
@@ -103,9 +118,9 @@ public:
 			if(exampleVal >= base && exampleVal < (base + memSize))
 			{
 				if(isFuncPtr) {
-					return (void*) sandbox->getUnsandboxedFuncPointer(p);
+					return (T*) sandbox->getUnsandboxedFuncPointer(p);
 				} else {
-					return (void*) sandbox->getUnsandboxedPointer(p);
+					return (T*) sandbox->getUnsandboxedPointer(p);
 				}
 			}
 		}
@@ -113,41 +128,47 @@ public:
 		abort();
 	}
 
-	static inline void* impl_GetSandboxedPointer(void* p, void* exampleUnsandboxedPtr)
+	template<typename T>
+	static inline T* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
+		const bool isFuncPtr = std::is_function<T>::value;
 		for(WasmSandbox* sandbox : sandboxList)
 		{
 			size_t memSize = sandbox->getTotalMemory();
 			uintptr_t base = (uintptr_t) sandbox->getSandboxMemoryBase();
-			uintptr_t pVal = (uintptr_t)p;
+			uintptr_t pVal = (uintptr_t)exampleUnsandboxedPtr;
 			if(pVal >= base && pVal < (base + memSize))
 			{
-				return (void*) sandbox->getSandboxedPointer(p);
+				return (T*) impl_GetSandboxedPointer_helper(sandbox, p);
 			}
 		}
 		printf("Could not find sandbox for address: %p\n", p);
 		abort();
 	}
 
-	inline void* impl_GetUnsandboxedPointer(void* p, bool isFuncPtr)
+	template<typename T>
+	inline T* impl_GetUnsandboxedPointer(T* p)
 	{
+		const bool isFuncPtr = std::is_function<T>::value;
 		if (isFuncPtr) {
-			return (void*) sandbox->getUnsandboxedFuncPointer(p);
+			return (T*) sandbox->getUnsandboxedFuncPointer(p);
 		} else {
-			return (void*) sandbox->getUnsandboxedPointer(p);
+			return (T*) sandbox->getUnsandboxedPointer(p);
 		}
 	}
 
-	inline void* impl_GetSandboxedPointer(void* p)
+	template<typename T>
+	inline T* impl_GetSandboxedPointer(T* p)
 	{
-		auto ret = (void*) sandbox->getSandboxedPointer(p);
-		return ret;
+		return (T*) impl_GetSandboxedPointer_helper(sandbox, p);
 	}
 
-	inline bool impl_isValidSandboxedPointer(const void* p, bool isFuncPtr)
+	template<typename T>
+	inline bool impl_isValidSandboxedPointer(T* p)
 	{
+		const bool isFuncPtr = std::is_function<T>::value;
 		if (isFuncPtr) {
-			return sandbox->getUnsandboxedFuncPointer(p) != nullptr;
+			return (sandbox->getUnsandboxedFuncPointer(p)) != nullptr;
 		} else {
 			return ((uintptr_t) p) < sandbox->getTotalMemory();
 		}
