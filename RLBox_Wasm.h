@@ -39,6 +39,18 @@ private:
 		return fnPtr(params..., callbackStateC->originalState);
 	}
 
+	template<typename T, typename std::enable_if<std::is_function<T>::value>::type* = nullptr>
+	static void* impl_GetSandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
+	{
+		return sandbox->registerInternalCallback(ptr);
+	}
+
+	template<typename T, typename std::enable_if<!std::is_function<T>::value>::type* = nullptr>
+	static void* impl_GetSandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
+	{
+		return sandbox->getSandboxedPointer(ptr);
+	}
+
 public:
 	#if defined(_M_X64) || defined(__x86_64__)
 		static const bool impl_Handle32bitPointerArrays;
@@ -113,16 +125,17 @@ public:
 		abort();
 	}
 
-	static inline void* impl_GetSandboxedPointer(void* p, void* exampleUnsandboxedPtr)
+	template<typename T>
+	static inline void* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		for(WasmSandbox* sandbox : sandboxList)
 		{
 			size_t memSize = sandbox->getTotalMemory();
 			uintptr_t base = (uintptr_t) sandbox->getSandboxMemoryBase();
-			uintptr_t pVal = (uintptr_t)p;
+			uintptr_t pVal = (uintptr_t) exampleUnsandboxedPtr;
 			if(pVal >= base && pVal < (base + memSize))
 			{
-				return (void*) sandbox->getSandboxedPointer(p);
+				return impl_GetSandboxedPointer_helper(sandbox, p);
 			}
 		}
 		printf("Could not find sandbox for address: %p\n", p);
@@ -138,9 +151,10 @@ public:
 		}
 	}
 
-	inline void* impl_GetSandboxedPointer(void* p)
+	template<typename T>
+	inline void* impl_GetSandboxedPointer(T* p)
 	{
-		auto ret = (void*) sandbox->getSandboxedPointer(p);
+		auto ret = impl_GetSandboxedPointer_helper(sandbox, p);
 		return ret;
 	}
 

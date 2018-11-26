@@ -415,17 +415,18 @@ public:
 		#endif
 	}
 
-	static inline void* impl_GetSandboxedPointer(void* p, void* exampleUnsandboxedPtr)
+	template<typename T>
+	static inline void* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
 			for(NaClSandbox* sandbox : sandboxList)
 			{
 				size_t memSize = 0x3FFFFFFF;
 				uintptr_t base = getSandboxMemoryBase(sandbox);
-				uintptr_t pVal = (uintptr_t)p;
+				uintptr_t pVal = (uintptr_t) const_cast<void*>((const void*)p);
 				if(pVal >= base && pVal < (base + memSize))
 				{
-					return (void*) getSandboxedAddress(sandbox, (uintptr_t)p);
+					return (void*) getSandboxedAddress(sandbox, pVal);
 				}
 			}
 			printf("Could not find sandbox for address: %p\n", p);
@@ -442,10 +443,11 @@ public:
 		auto ret = (void*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
 		return ret;
 	}
-	
-	inline void* impl_GetSandboxedPointer(void* p)
+
+	template<typename T>
+	inline void* impl_GetSandboxedPointer(T* p)
 	{
-		auto ret = (void*) getSandboxedAddress(sandbox, (uintptr_t)p);
+		auto ret = (void*) getSandboxedAddress(sandbox, (uintptr_t)const_cast<void*>((const void*)p);
 		return ret;
 	}
 

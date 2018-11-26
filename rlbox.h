@@ -300,7 +300,7 @@ namespace rlbox
 		}
 
 		inline T* UNSAFE_Unverified() const noexcept { return field; }
-		inline T* UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandboxP) const noexcept { return (T*) sandboxP->getSandboxedPointer((void*)field); }
+		inline T* UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandboxP) const noexcept { return (T*) sandboxP->getSandboxedPointer(field); }
 	};
 
 	template <typename T, typename TSandbox>
@@ -344,7 +344,7 @@ namespace rlbox
 		}
 
 		inline T* UNSAFE_Unverified() const noexcept { return field; }
-		inline T* UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandboxP) const noexcept { return (T*) sandboxP->getSandboxedPointer((void*)field); }
+		inline T* UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandboxP) const noexcept { return (T*) sandboxP->getSandboxedPointer(field); }
 	};
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -602,7 +602,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
 		{
-			return (T) sandbox->getSandboxedPointer((void*)field);
+			return (T) sandbox->getSandboxedPointer(field);
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2> && !(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>))>
@@ -955,7 +955,7 @@ namespace rlbox
 		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
-			return (T) TSandbox::impl_GetSandboxedPointer((void*)(arg), exampleUnsandboxedPtr);
+			return (T) TSandbox::impl_GetSandboxedPointer(arg, exampleUnsandboxedPtr);
 		}
 
 		template<typename TRHS, typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
@@ -1003,7 +1003,7 @@ namespace rlbox
 			{
 				abort();
 			}
-			field = (T) sandbox->getSandboxedPointer((void*) pointerVal);
+			field = (T) sandbox->getSandboxedPointer( pointerVal);
 		}
 
 		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
@@ -1323,7 +1323,7 @@ namespace rlbox
 
 		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
 		{
-			return (T) sandbox->getSandboxedPointer((void*)field);
+			return (T) sandbox->getSandboxedPointer(field);
 		}
 
 		//Non class pointers - one level pointers
@@ -1798,7 +1798,8 @@ namespace rlbox
 			return ret;
 		}
 
-		inline void* getSandboxedPointer(void* p)
+		template<typename T>
+		inline void* getSandboxedPointer(T* p)
 		{
 			return this->impl_GetSandboxedPointer(p);
 		}

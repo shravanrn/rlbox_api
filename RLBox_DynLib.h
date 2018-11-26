@@ -121,20 +121,22 @@ public:
 	{
 		return p;
 	}
-	
-	static inline void* impl_GetSandboxedPointer(void* p, void* exampleUnsandboxedPtr)
+
+	template<typename T>
+	static inline void* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
-		return p;
+		return const_cast<void*>((const void*)p);
 	}
 
 	inline void* impl_GetUnsandboxedPointer(void* p, bool isFuncPtr)
 	{
 		return p;
 	}
-	
-	inline void* impl_GetSandboxedPointer(void* p)
+
+	template<typename T>
+	inline void* impl_GetSandboxedPointer(T* p)
 	{
-		return p;
+		return (void*) const_cast<void*>((const void*)p);
 	}
 
 	inline bool impl_isValidSandboxedPointer(const void* p, bool isFuncPtr)
