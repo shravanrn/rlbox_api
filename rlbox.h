@@ -1718,7 +1718,7 @@ namespace rlbox
 	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_or_enum_v<TArg>)>
 	std::true_type sandbox_callback_is_arg_tainted_helper(TArg);
 
-	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_or_enum_v<TArg>)>
+	template<typename TSandbox, typename TArg, ENABLE_IF(!my_is_fundamental_or_enum_v<TArg>)>
 	std::false_type sandbox_callback_is_arg_tainted_helper(TArg);
 
 	template <typename TSandbox, typename TArg>
