@@ -447,7 +447,7 @@ public:
 	template<typename T>
 	inline void* impl_GetSandboxedPointer(T* p)
 	{
-		auto ret = (void*) getSandboxedAddress(sandbox, (uintptr_t)const_cast<void*>((const void*)p);
+		auto ret = (void*) getSandboxedAddress(sandbox, (uintptr_t)const_cast<void*>((const void*)p));
 		return ret;
 	}
 
