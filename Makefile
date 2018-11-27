@@ -33,7 +33,7 @@ ifeq ($(NO_WASM),1)
 	WASM_LIBS_64=
 else
 	WASM_INCLUDES=-I$(WASM_SANDBOX_DIR)/wasm2c
-	WASM_LIBS_64=$(WASM_SANDBOX_DIR)/bin/libwasm_sandbox.a
+	WASM_LIBS_64=$(WASM_SANDBOX_DIR)/bin/libwasm_sandbox.o
 endif
 
 include $(WASM_SANDBOX_DIR)/builds/Makefile.inc

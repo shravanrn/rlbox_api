@@ -13,6 +13,7 @@ private:
 	WasmSandbox* sandbox;
 	static std::vector<WasmSandbox*> sandboxList;
 	std::mutex callbackMutex;
+	std::mutex threadMutex;
 	class WasmSandboxStateWrapper
 	{
 	public:
@@ -30,12 +31,33 @@ private:
 	};
 	std::map<void*, WasmSandboxStateWrapper*> callbackSlotInfo;
 
+	//https://stackoverflow.com/questions/23467635/is-there-a-variant-of-stdlock-guard-that-unlocks-at-construction-and-locks-at
+	template <class T>
+	class unlock_guard
+	{
+	public:
+		unlock_guard(T& mutex) : mutex_(mutex) {
+			mutex_.unlock();
+		}
+
+		~unlock_guard() {
+			mutex_.lock();
+		}
+
+		unlock_guard(const unlock_guard&) = delete;
+		unlock_guard& operator=(const unlock_guard&) = delete;
+
+	private:
+		T& mutex_;
+	};
+
 	template<typename TRet, typename... TArgs> 
 	static TRet impl_CallbackReceiver(void* callbackState, TArgs... params)
 	{
 		WasmSandboxStateWrapper* callbackStateC = (WasmSandboxStateWrapper*) callbackState;
 		using fnType = TRet(*)(TArgs..., void*);
 		fnType fnPtr = (fnType)(uintptr_t) callbackStateC->fnPtr;
+		unlock_guard<std::mutex> unlock(callbackStateC->sandbox->threadMutex);
 		return fnPtr(params..., callbackStateC->originalState);
 	}
 
@@ -212,12 +234,14 @@ public:
 	template <typename TRet, typename ... TOrigArgs, typename ... TArgs>
 	TRet impl_InvokeFunction(TRet(*fnPtr)(TOrigArgs...), TArgs... params)
 	{
+		std::lock_guard<std::mutex> lock(threadMutex);
 		return sandbox->invokeFunction(fnPtr, params...);
 	}
 
 	template <typename TRet, typename ... TOrigArgs, typename ... TArgs>
 	TRet impl_InvokeFunctionReturnAppPtr(TRet(*fnPtr)(TOrigArgs...), TArgs... params)
 	{
+		std::lock_guard<std::mutex> lock(threadMutex);
 		using TargetFuncType = uint32_t(*)(TArgs...);
 		uintptr_t rawRet = (uintptr_t) sandbox->invokeFunction((TargetFuncType) fnPtr, params...);
 		return (TRet) rawRet;
