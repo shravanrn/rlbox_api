@@ -745,7 +745,7 @@ namespace rlbox
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
-			static_assert(sizeof(nonPointerType) <= 0xFFFFFFFF);
+			static_assert(sizeof(nonPointerType) <= 0xFFFFFFFF, "Overflow on size of type in copyAndVerifyArray");
 			auto arrayByteLen = static_cast<uint64_t>(sizeof(nonPointerType)) * static_cast<uint64_t>(elementCount);
 			uintptr_t arrayEnd = maskedFieldInt + arrayByteLen;
 
@@ -947,7 +947,7 @@ namespace rlbox
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
-		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg) const
+		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
 			return arg;
 		}
@@ -1094,7 +1094,7 @@ namespace rlbox
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
 			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
-			static_assert(sizeof(nonPointerType) <= 0xFFFFFFFF);
+			static_assert(sizeof(nonPointerType) <= 0xFFFFFFFF, "Overflow on size of type in copyAndVerifyArray");
 			auto arrayByteLen = static_cast<uint64_t>(sizeof(nonPointerType)) * static_cast<uint64_t>(elementCount);
 			uintptr_t arrayEnd = maskedFieldInt + arrayByteLen;
 
@@ -1738,6 +1738,7 @@ namespace rlbox
 	private:
 		RLBoxSandbox(){}
 		void* fnPointerMap = nullptr;
+		std::mutex functionPointerCacheLock;
 
 	public:
 		static RLBoxSandbox* createSandbox(const char* sandboxRuntimePath, const char* libraryPath)
@@ -1863,6 +1864,7 @@ namespace rlbox
 		void* getFunctionPointerFromCache(const char* fnName)
 		{
 			void* fnPtr;
+			std::lock_guard<std::mutex> lock(functionPointerCacheLock);
 			if(!fnPointerMap)
 			{
 				fnPointerMap = new std::map<std::string, void*>;
