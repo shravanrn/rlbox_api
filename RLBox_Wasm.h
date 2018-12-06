@@ -95,12 +95,14 @@ public:
 
 	inline void* impl_mallocInSandbox(size_t size)
 	{
+		std::lock_guard<std::mutex> lock(threadMutex);
 		return sandbox->mallocInSandbox(size);
 	}
 
 	//parameter val is a sandboxed pointer
 	inline void impl_freeInSandbox(void* val)
 	{
+		std::lock_guard<std::mutex> lock(threadMutex);
 		sandbox->freeInSandbox(val);
 	}
 
