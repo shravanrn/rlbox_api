@@ -33,3 +33,4 @@
 /test
 *.nexe
 /out/
+/.vscode/
