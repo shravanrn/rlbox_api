@@ -13,7 +13,7 @@
 #include <functional>
 #include <type_traits>
 #include <map>
-#include <string.h>
+#include <cstring>
 #include <cstdint>
 #include <mutex>
 
@@ -1603,8 +1603,8 @@ namespace rlbox
 	#define helper_tainted_volatile_createField(fieldType, fieldName, isFrozen, TSandbox) my_conditional_t<isFrozen == 0, tainted_volatile<fieldType, TSandbox>, tainted_freezable_volatile<fieldType, TSandbox>> fieldName;
 	#define helper_noOp()
 	#define helper_fieldInit(fieldType, fieldName, isFrozen, TSandbox) fieldName = p.fieldName;
-	#define helper_fieldCopy(fieldType, fieldName, isFrozen, TSandbox) { tainted<fieldType, TSandbox> temp = convertToTaintedField(fieldName); memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
-	#define helper_fieldCopyUnsandbox(fieldType, fieldName, isFrozen, TSandbox) { auto temp = fieldName.UNSAFE_Sandboxed(sandbox); memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
+	#define helper_fieldCopy(fieldType, fieldName, isFrozen, TSandbox) { tainted<fieldType, TSandbox> temp = convertToTaintedField(fieldName); std::memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
+	#define helper_fieldCopyUnsandbox(fieldType, fieldName, isFrozen, TSandbox) { auto temp = fieldName.UNSAFE_Sandboxed(sandbox); std::memcpy((void*) &(ret.fieldName), (void*) &temp, sizeof(ret.fieldName)); }
 	#define helper_fieldUnsandbox(fieldType, fieldName, isFrozen, TSandbox) fieldName.unsandboxPointersOrNull(sandbox);
 
 	#define tainted_data_specialization(T, libId, TSandbox) \
@@ -2026,6 +2026,34 @@ namespace rlbox
 		tainted<TRHS, TSandbox> taintedVal = rhs;
 		auto pret = (tainted<TLHS, TSandbox>*) &taintedVal;
 		return *pret;
+	}
+
+	template<typename TSandbox, typename TRHS, typename TVal, typename TNum, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
+	inline TWrap<TRHS*, TSandbox> memset(RLBoxSandbox<TSandbox>* sandbox, TWrap<TRHS*, TSandbox> ptr, TVal value, TNum num)
+	{
+		auto unum = rlboxUnwrapOrReturnValue(num);
+		tainted<char*, TSandbox> endVal = sandbox_reinterpret_cast<char*>(ptr) + unum;
+		if(unum >= sandbox->getTotalMemory() || !sandbox->isPointerInSandboxMemoryOrNull(endVal.UNSAFE_Unverified()))
+		{
+			printf("memset is out of bounds\n");
+			abort();
+		}
+		std::memset((void*) ptr.UNSAFE_Unverified(), rlboxUnwrapOrReturnValue(value), unum);
+		return ptr;
+	}
+
+	template<typename TSandbox, typename TRHS, typename TLHS, typename TNum, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
+	inline TWrap<TRHS*, TSandbox> memcpy(RLBoxSandbox<TSandbox>* sandbox, TWrap<TRHS*, TSandbox> dest, TLHS src, TNum num)
+	{
+		auto unum = rlboxUnwrapOrReturnValue(num);
+		tainted<char*, TSandbox> endVal = sandbox_reinterpret_cast<char*>(dest) + unum;
+		if(unum >= sandbox->getTotalMemory() || !sandbox->isPointerInSandboxMemoryOrNull(endVal.UNSAFE_Unverified()))
+		{
+			printf("memcpy is out of bounds\n");
+			abort();
+		}
+		std::memcpy((void*) dest.UNSAFE_Unverified(), rlboxUnwrapOrReturnValue(src), unum);
+		return dest;
 	}
 
 	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)

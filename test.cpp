@@ -481,6 +481,63 @@ public:
 		);
 	}
 
+	void testMemset()
+	{
+		auto initVal = sandbox->template mallocInSandbox<unsigned int>(12);
+		auto fifth = initVal + 4;
+
+		// Memset with untainted val and untainted size
+		for(int i = 0; i < 12; i++){ *(initVal + i) = 0xFFFFFFFF; }
+		memset(sandbox, fifth, 0, sizeof(tainted<unsigned int, TSandbox>) * 4);
+
+		for(int i = 0; i < 4; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
+		for(int i = 4; i < 8; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0); }
+		for(int i = 8; i < 12; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
+
+		// Memset with tainted val and untainted size
+		tainted<int, TSandbox> val = 0;
+		for(int i = 0; i < 12; i++){ *(initVal + i) = 0xFFFFFFFF; }
+		memset(sandbox, fifth, val, sizeof(tainted<unsigned int, TSandbox>) * 4);
+
+		for(int i = 0; i < 4; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
+		for(int i = 4; i < 8; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0); }
+		for(int i = 8; i < 12; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
+
+		// Memset with tainted val and untainted size
+		tainted<size_t, TSandbox> size = sizeof(tainted<unsigned int, TSandbox>) * 4;
+		for(int i = 0; i < 12; i++){ *(initVal + i) = 0xFFFFFFFF; }
+		memset(sandbox, fifth, val, size);
+
+		for(int i = 0; i < 4; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
+		for(int i = 4; i < 8; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0); }
+		for(int i = 8; i < 12; i++){ ENSURE(*((initVal + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
+	}
+
+	void testMemcpy()
+	{
+		auto dest = sandbox->template mallocInSandbox<unsigned int>(12);
+		auto dest_fifth = dest + 4;
+
+		//tainted src
+		for(int i = 0; i < 12; i++){ *(dest + i) = 0; }
+		auto src = sandbox->template mallocInSandbox<unsigned int>(12);
+		auto src_fifth = src + 4;
+		for(int i = 0; i < 12; i++){ *(src + i) = 0xFFFFFFFF; }
+		memcpy(sandbox, dest_fifth, src_fifth, sizeof(tainted<unsigned int, TSandbox>) * 4);
+		for(int i = 0; i < 4; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
+		for(int i = 4; i < 8; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
+		for(int i = 8; i < 12; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
+		
+		//untainted src
+		auto src2 = (unsigned int *) malloc(12 * sizeof(unsigned int));
+		auto src2_fifth = src2 + 4;
+		for(int i = 0; i < 12; i++){ *(src2 + i) = 0xFFFFFFFF; }
+		memcpy(sandbox, dest_fifth, src2_fifth, sizeof(tainted<unsigned int, TSandbox>) * 4);
+		for(int i = 0; i < 4; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
+		for(int i = 4; i < 8; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
+		for(int i = 8; i < 12; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
+	}
+
 	void testFrozenValues()
 	{
 		tainted_freezable<int*, TSandbox> pfa = sandbox->template mallocFrozenInSandbox<int>();
@@ -612,6 +669,8 @@ public:
 		testAppPtrFunctionReturn();
 		testPointersInStruct();
 		test32BitPointerEdgeCases();
+		testMemset();
+		testMemcpy();
 		testFrozenValues();
 		testFrozenStructs();
 	}
