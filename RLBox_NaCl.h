@@ -364,7 +364,7 @@ public:
 		#else
 			#error Unsupported platform!
 		#endif
-		return (char*)impl_GetUnsandboxedPointer((void*)sboxMem, false /* isFuncPtr */);
+		return (char*)impl_GetUnsandboxedPointer((void*)sboxMem);
 	}
 
 	inline void* impl_pushStackArr(size_t size)
@@ -388,7 +388,8 @@ public:
 
 	//Nice trick to sandbox and unsandbox pointers without knowing a reference to the sandbox
 	//Gain the sandbox memory's base address from the address of the pointer itself, since the pointer val
-	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr, bool isFuncPtr)
+	template<typename T>
+	static inline void* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
 			for(NaClSandbox* sandbox : sandboxList)
@@ -398,14 +399,14 @@ public:
 				uintptr_t exampleVal = (uintptr_t)exampleUnsandboxedPtr;
 				if(exampleVal >= base && exampleVal < (base + memSize))
 				{
-					return (void*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
+					return (void*) getUnsandboxedAddress(sandbox, (uintptr_t)const_cast<void*>((const void*)p));
 				}
 			}
-			printf("Could not find sandbox for address: %p\n", p);
+			printf("Could not find sandbox for address: %p\n", const_cast<void*>((const void*)p));
 			abort();
 		#elif defined(_M_X64) || defined(__x86_64__)
 			//32 bit mask
-			uintptr_t suffix = ((uintptr_t)p) & 0xFFFFFFFF;
+			uintptr_t suffix = ((uintptr_t)const_cast<void*>((const void*)p)) & 0xFFFFFFFF;
 			if(suffix == 0) { return 0; }
 			uintptr_t mask = ((uintptr_t)exampleUnsandboxedPtr) & 0xFFFFFFFF00000000;
 			uintptr_t ret = mask | suffix;
@@ -429,7 +430,7 @@ public:
 					return (void*) getSandboxedAddress(sandbox, pVal);
 				}
 			}
-			printf("Could not find sandbox for address: %p\n", p);
+			printf("Could not find sandbox for address: %p\n", const_cast<void*>((const void*)p));
 			abort();
 		#else
 			//32 bit mask
@@ -438,9 +439,10 @@ public:
 		#endif
 	}
 
-	inline void* impl_GetUnsandboxedPointer(void* p, bool isFuncPtr)
+	template<typename T>
+	inline void* impl_GetUnsandboxedPointer(T* p)
 	{
-		auto ret = (void*) getUnsandboxedAddress(sandbox, (uintptr_t)p);
+		auto ret = (void*) getUnsandboxedAddress(sandbox, (uintptr_t)const_cast<void*>((const void*)p));
 		return ret;
 	}
 

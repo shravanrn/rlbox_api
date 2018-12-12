@@ -62,15 +62,27 @@ private:
 	}
 
 	template<typename T, typename std::enable_if<std::is_function<T>::value>::type* = nullptr>
-	static void* impl_GetSandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
+	static inline void* impl_GetSandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
 	{
 		return sandbox->registerInternalCallback(ptr);
 	}
 
 	template<typename T, typename std::enable_if<!std::is_function<T>::value>::type* = nullptr>
-	static void* impl_GetSandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
+	static inline void* impl_GetSandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
 	{
 		return sandbox->getSandboxedPointer(ptr);
+	}
+
+	template<typename T, typename std::enable_if<std::is_function<T>::value>::type* = nullptr>
+	static inline void* impl_GetUnsandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
+	{
+		return (void*) sandbox->getUnsandboxedFuncPointer(const_cast<void*>((const void*)ptr));
+	}
+
+	template<typename T, typename std::enable_if<!std::is_function<T>::value>::type* = nullptr>
+	static inline void* impl_GetUnsandboxedPointer_helper(WasmSandbox* sandbox, T* ptr)
+	{
+		return (void*) sandbox->getUnsandboxedPointer(const_cast<void*>((const void*)ptr));
 	}
 
 public:
@@ -129,7 +141,8 @@ public:
 		return impl_freeInSandbox(ptr);
 	}
 
-	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr, bool isFuncPtr)
+	template<typename T>
+	static inline void* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		for(WasmSandbox* sandbox : sandboxList)
 		{
@@ -138,14 +151,10 @@ public:
 			uintptr_t exampleVal = (uintptr_t)exampleUnsandboxedPtr;
 			if(exampleVal >= base && exampleVal < (base + memSize))
 			{
-				if(isFuncPtr) {
-					return (void*) sandbox->getUnsandboxedFuncPointer(p);
-				} else {
-					return (void*) sandbox->getUnsandboxedPointer(p);
-				}
+				return impl_GetUnsandboxedPointer_helper(sandbox, p);
 			}
 		}
-		printf("Could not find sandbox for address: %p\n", p);
+		printf("Could not find sandbox for address: %p\n", const_cast<void*>((const void*)p));
 		abort();
 	}
 
@@ -162,17 +171,14 @@ public:
 				return impl_GetSandboxedPointer_helper(sandbox, p);
 			}
 		}
-		printf("Could not find sandbox for address: %p\n", p);
+		printf("Could not find sandbox for address: %p\n", const_cast<void*>((const void*)p));
 		abort();
 	}
 
-	inline void* impl_GetUnsandboxedPointer(void* p, bool isFuncPtr)
+	template<typename T>
+	inline void* impl_GetUnsandboxedPointer(T* p)
 	{
-		if (isFuncPtr) {
-			return (void*) sandbox->getUnsandboxedFuncPointer(p);
-		} else {
-			return (void*) sandbox->getUnsandboxedPointer(p);
-		}
+		return impl_GetUnsandboxedPointer_helper(sandbox, p);
 	}
 
 	template<typename T>

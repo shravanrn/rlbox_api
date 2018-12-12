@@ -620,7 +620,7 @@ namespace rlbox
 			{
 				if(sandbox->isValidSandboxedPointer(*curr, my_is_function_ptr_v<my_remove_extent_t<T>>))
 				{
-					*curr = sandbox->getUnsandboxedPointer(*curr, my_is_function_ptr_v<my_remove_extent_t<T>>);
+					*curr = sandbox->getUnsandboxedPointer(*curr);
 				}
 				else
 				{
@@ -644,7 +644,7 @@ namespace rlbox
 				void* curr = (void*)(((uintptr_t)*currRead) & 0xFFFFFFFF);
 				if(sandbox->isValidSandboxedPointer(curr, my_is_function_ptr_v<my_remove_extent_t<T>>))
 				{
-					*currWrite = sandbox->getUnsandboxedPointer(curr, my_is_function_ptr_v<my_remove_extent_t<T>>);
+					*currWrite = sandbox->getUnsandboxedPointer(curr);
 				}
 				else
 				{
@@ -658,7 +658,7 @@ namespace rlbox
 		{
 			if(sandbox->isValidSandboxedPointer((const void*)field, my_is_function_ptr_v<T>))
 			{
-				field = (T) sandbox->getUnsandboxedPointer((void*)field, my_is_function_ptr_v<T>);
+				field = (T) sandbox->getUnsandboxedPointer(field);
 			}
 			else
 			{
@@ -943,7 +943,7 @@ namespace rlbox
 		inline my_decay_if_array_t<T> getAppSwizzledValue(my_add_volatile_t<T> arg, void* exampleUnsandboxedPtr) const
 		{
 			// static_cast drops constness
-			return (T) TSandbox::impl_GetUnsandboxedPointer((void*) arg, exampleUnsandboxedPtr, my_is_function_ptr_v<T>);
+			return (T) TSandbox::impl_GetUnsandboxedPointer(arg, exampleUnsandboxedPtr);
 		}
 
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
@@ -1805,9 +1805,10 @@ namespace rlbox
 			return this->impl_GetSandboxedPointer(p);
 		}
 
-		inline void* getUnsandboxedPointer(void* p, bool isFuncPtr)
+		template<typename T>
+		inline void* getUnsandboxedPointer(T* p)
 		{
-			return this->impl_GetUnsandboxedPointer(p, isFuncPtr);
+			return this->impl_GetUnsandboxedPointer(p);
 		}
 
 		inline bool isValidSandboxedPointer(const void* p, bool isFuncPtr)

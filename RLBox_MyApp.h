@@ -118,26 +118,28 @@ public:
 		return free(ptr);
 	}
 
-	static inline void* impl_GetUnsandboxedPointer(void* p, void* exampleUnsandboxedPtr, bool isFuncPtr)
+	template<typename T>
+	static inline void* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
-		return p;
+		return const_cast<void*>((const void*)p);
 	}
 
 	template<typename T>
 	static inline void* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
-		return (void*) const_cast<void*>((const void*)p);
+		return const_cast<void*>((const void*)p);
 	}
 
-	inline void* impl_GetUnsandboxedPointer(void* p, bool isFuncPtr)
+	template<typename T>
+	inline void* impl_GetUnsandboxedPointer(T* p)
 	{
-		return p;
+		return const_cast<void*>((const void*)p);
 	}
 
 	template<typename T>
 	inline void* impl_GetSandboxedPointer(T* p)
 	{
-		return (void*) const_cast<void*>((const void*)p);
+		return const_cast<void*>((const void*)p);
 	}
 
 	inline bool impl_isValidSandboxedPointer(const void* p, bool isFuncPtr)
