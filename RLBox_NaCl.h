@@ -478,6 +478,43 @@ public:
 		return isAddressInNonSandboxMemoryOrNull(sandbox, (uintptr_t) p);
 	}
 
+	template<typename T>
+	static inline T* impl_pointerIncrement(T* p, int64_t increment)
+	{
+		#if defined(_M_IX86) || defined(__i386__)
+			for(NaClSandbox* sandbox : sandboxList)
+			{
+				size_t memSize = 0x3FFFFFFF;
+				uintptr_t base = getSandboxMemoryBase(sandbox);
+				uintptr_t pVal = (uintptr_t) const_cast<void*>((const void*)p);
+				if(pVal >= base && pVal < (base + memSize))
+				{
+					auto ret = p + increment;
+					uintptr_t retv = (uintptr_t) const_cast<void*>((const void*)ret);
+					if(retv >= base && retv < (base + memSize))
+					{
+						return ret;
+					}
+					else
+					{
+						printf("Incrementing address %p resulted in an out of bounds\n", (void*)retv);
+						abort();
+					}
+				}
+			}
+			printf("Could not find sandbox for address: %p\n", const_cast<void*>((const void*)p));
+			abort();
+		#elif defined(_M_X64) || defined(__x86_64__)
+			auto result = p + increment;
+			uintptr_t suffix = ((uintptr_t)const_cast<void*>((const void*)result)) & 0xFFFFFFFF;
+			uintptr_t mask = ((uintptr_t)const_cast<void*>((const void*)p)) & 0xFFFFFFFF00000000;
+			uintptr_t ret = mask | suffix;
+			return (T*) ret;
+		#else
+			#error Unsupported platform!
+		#endif
+	}
+
 	template<typename TRet, typename... TArgs>
 	inline void* impl_RegisterCallback(void* key, void* callback, void* state)
 	{

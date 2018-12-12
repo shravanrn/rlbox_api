@@ -156,6 +156,12 @@ public:
 		return true;
 	}
 
+	template<typename T>
+	static inline T* impl_pointerIncrement(T* p, int64_t increment)
+	{
+		return p + increment;
+	}
+
 	template<typename TRet, typename... TArgs>
 	inline void* impl_RegisterCallback(void* key, void* callback, void* state)
 	{

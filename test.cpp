@@ -118,6 +118,16 @@ public:
 		ps->voidPtr = nullptr;
 	}
 
+	void testPointerArithmetic()
+	{
+		tainted<int*, TSandbox> pc = sandbox->template mallocInSandbox<int>();
+		tainted<int*, TSandbox> inc = pc + 1;
+		auto diff = ((char*)inc.UNSAFE_Unverified()) - ((char*)pc.UNSAFE_Unverified());
+		ENSURE(diff == 4);
+		tainted<int*, TSandbox> dec = inc - 1;
+		ENSURE(pc.UNSAFE_Unverified() == dec.UNSAFE_Unverified());
+	}
+
 	void testVolatilePtrToTaintedPtrConversions()
 	{
 		tainted<testStruct*, TSandbox> ps = sandbox->template mallocInSandbox<testStruct>();
@@ -578,6 +588,7 @@ public:
 		testBinaryOperators();
 		testDerefOperators();
 		testPointerAssignments();
+		testPointerArithmetic();
 		testVolatilePtrToTaintedPtrConversions();
 		testVolatileDerefOperator();
 		testAddressOfOperators();

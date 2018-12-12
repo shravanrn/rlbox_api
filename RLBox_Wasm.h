@@ -207,6 +207,33 @@ public:
 		return sandbox->isAddressInNonSandboxMemoryOrNull(p);
 	}
 
+	template<typename T>
+	static inline T* impl_pointerIncrement(T* p, int64_t increment)
+	{
+		for(WasmSandbox* sandbox : sandboxList)
+		{
+			size_t memSize = sandbox->getTotalMemory();
+			uintptr_t base = (uintptr_t) sandbox->getSandboxMemoryBase();
+			uintptr_t pVal = (uintptr_t) const_cast<void*>((const void*)p);
+			if(pVal >= base && pVal < (base + memSize))
+			{
+				auto ret = p + increment;
+				uintptr_t retv = (uintptr_t) const_cast<void*>((const void*)ret);
+				if(retv >= base && retv < (base + memSize))
+				{
+					return ret;
+				}
+				else
+				{
+					printf("Incrementing address %p resulted in an out of bounds\n", (void*)retv);
+					abort();
+				}
+			}
+		}
+		printf("Could not find sandbox for address: %p\n", const_cast<void*>((const void*)p));
+		abort();
+	}
+
 	template<typename TRet, typename... TArgs>
 	inline void* impl_RegisterCallback(void* key, void* callback, void* state)
 	{

@@ -876,6 +876,20 @@ namespace rlbox
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
+		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
+		{
+			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), rlboxUnwrapOrReturnValue(rhs));
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
+		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
+		{
+			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), - rlboxUnwrapOrReturnValue(rhs));
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
 		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
@@ -1243,6 +1257,20 @@ namespace rlbox
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
+		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
+		{
+			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), rlboxUnwrapOrReturnValue(rhs));
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
+		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
+		{
+			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), - rlboxUnwrapOrReturnValue(rhs));
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
 		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
@@ -1524,6 +1552,20 @@ namespace rlbox
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
+		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
+		{
+			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), rlboxUnwrapOrReturnValue(rhs));
+			return *((tainted<T, TSandbox>*) &result);
+		}
+
+		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
+		{
+			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), - rlboxUnwrapOrReturnValue(rhs));
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
