@@ -1968,6 +1968,16 @@ namespace rlbox
 			return &(this->impl_MaintainAppPtrMap);
 		}
 
+		template<typename T>
+		sandbox_stackarr_helper<T, TSandbox> stacktemp()
+		{
+			const size_t size = sizeof(T);
+			T* argInSandbox = static_cast<T*>(this->impl_pushStackArr(size));
+			memset((void*)argInSandbox, 0, size);
+
+			return sandbox_stackarr_helper<T, TSandbox>(this, argInSandbox, size);
+		}
+
 		template <typename T>
 		inline sandbox_stackarr_helper<T, TSandbox> stackarr(T* arg, size_t size)
 		{
