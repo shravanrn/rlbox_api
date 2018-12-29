@@ -43,7 +43,7 @@ mkdir_out:
 	mkdir -p ./out/x64
 
 out/x32/test: mkdir_out $(CURDIR)/test.cpp $(CURDIR)/rlbox.h $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
-	$(CXX) -m32 $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 $(CFLAGS) -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic -ldl $(NACL_LIBS_32) -o $@
+	$(CXX) -m32 $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 $(CFLAGS) -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic $(NACL_LIBS_32)  -ldl -lpthread -o $@
 
 out/x32/libtest.so: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 	$(CXX) -m32 -std=c++11 $(CFLAGS) -shared -fPIC $(CURDIR)/libtest.cpp -o $@
@@ -56,7 +56,7 @@ out/x32/libtest.nexe: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 endif
 
 out/x64/test: mkdir_out $(CURDIR)/test.cpp $(CURDIR)/rlbox.h $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
-	$(CXX) $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 $(CFLAGS) -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic -ldl $(NACL_LIBS_64) $(WASM_LIBS_64) -o $@
+	$(CXX) $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 $(CFLAGS) -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic $(NACL_LIBS_64) $(WASM_LIBS_64) -ldl -lpthread -o $@
 
 out/x64/libtest.so: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 	$(CXX) -std=c++11 $(CFLAGS) -shared -fPIC $(CURDIR)/libtest.cpp -o $@
