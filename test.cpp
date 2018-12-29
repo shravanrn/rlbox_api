@@ -183,7 +183,7 @@ public:
 	{
 		auto ret2 = sandbox_invoke(sandbox, simpleLongAddTest, std::numeric_limits<std::uint32_t>::max(), 20);
 		unsigned long result = ((unsigned long)std::numeric_limits<std::uint32_t>::max()) + 20ul;
-		ENSURE(ret2.UNSAFE_Unverified() == result);		
+		ENSURE(ret2.UNSAFE_Unverified() == result);
 	}
 
 	void testTwoVerificationFunctionFormats()
@@ -239,9 +239,9 @@ public:
 		auto aCopy = a.copyAndVerify([](unsigned val){ return val > 0 && val < 100? val : -1; });
 		auto bCopy = b.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
 		unsigned cCopy[1];
-		c.copyAndVerify(cCopy, sizeof(cCopy), [](unsigned arr[1], size_t arrSize){ 
-			UNUSED(arrSize); 
-			unsigned val = *arr; 
+		c.copyAndVerify(cCopy, sizeof(cCopy), [](unsigned arr[1], size_t arrSize){
+			UNUSED(arrSize);
+			unsigned val = *arr;
 			return val > 0 && val < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE;
 		});
 		if(cCopy[0] + 1 != aCopy)
@@ -344,15 +344,15 @@ public:
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructVal);
 		auto result = resultT
-			.copyAndVerify([this](tainted<testStruct, TSandbox>& val){ 
+			.copyAndVerify([this](tainted<testStruct, TSandbox>& val){
 				testStruct ret;
 				ret.fieldLong = val.fieldLong.copyAndVerify([](unsigned long val) { return val; });
 				ret.fieldString = val.fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
 				ret.fieldBool = val.fieldBool.copyAndVerify([](unsigned int val) { return val; });
 				val.fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
-				return ret; 
+				return ret;
 			});
-		ENSURE(result.fieldLong == 7 && 
+		ENSURE(result.fieldLong == 7 &&
 			strcmp(result.fieldString, "Hello") == 0 &&
 			result.fieldBool == 1 &&
 			strcmp(result.fieldFixedArr, "Bye") == 0);
@@ -367,15 +367,15 @@ public:
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructPtr);
 		auto result = resultT
-			.copyAndVerify([this](tainted<testStruct, TSandbox>* val) { 
+			.copyAndVerify([this](tainted<testStruct, TSandbox>* val) {
 				testStruct ret;
 				ret.fieldLong = val->fieldLong.copyAndVerify([](unsigned long val) { return val; });
 				ret.fieldString = val->fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
 				ret.fieldBool = val->fieldBool.copyAndVerify([](unsigned int val) { return val; });
 				val->fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
-				return ret; 
+				return ret;
 			});
-		ENSURE(result.fieldLong == 7 && 
+		ENSURE(result.fieldLong == 7 &&
 			strcmp(result.fieldString, "Hello") == 0 &&
 			result.fieldBool == 1 &&
 			strcmp(result.fieldFixedArr, "Bye") == 0);
@@ -428,7 +428,7 @@ public:
 		auto initVal = sandbox->template mallocInSandbox<char>();
 		auto resultT = sandbox_invoke(sandbox, initializePointerStruct, initVal);
 		auto result = resultT
-			.copyAndVerify([this](tainted<pointersStruct, TSandbox>& val){ 
+			.copyAndVerify([this](tainted<pointersStruct, TSandbox>& val){
 				pointersStruct ret;
 				ret.firstPointer = val.firstPointer.UNSAFE_Unverified();
 				ret.pointerArray[0] = val.pointerArray[0].UNSAFE_Unverified();
@@ -436,7 +436,7 @@ public:
 				ret.pointerArray[2] = val.pointerArray[2].UNSAFE_Unverified();
 				ret.pointerArray[3] = val.pointerArray[3].UNSAFE_Unverified();
 				ret.lastPointer = val.lastPointer.UNSAFE_Unverified();
-				return ret; 
+				return ret;
 			});
 		char* initValRaw = initVal.UNSAFE_Unverified();
 		sandbox->freeInSandbox(initVal);
@@ -527,7 +527,7 @@ public:
 		for(int i = 0; i < 4; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
 		for(int i = 4; i < 8; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
 		for(int i = 8; i < 12; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
-		
+
 		//untainted src
 		auto src2 = (unsigned int *) malloc(12 * sizeof(unsigned int));
 		auto src2_fifth = src2 + 4;
@@ -598,9 +598,9 @@ public:
 				ret.fieldString = val.fieldString.UNSAFE_Unverified();
 				ret.fieldBool = val.fieldBool.copyAndVerify([](unsigned int val) { return val; });
 				val.fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
-				return ret; 
+				return ret;
 			});
-		ENSURE(result.fieldLong == 7 && 
+		ENSURE(result.fieldLong == 7 &&
 			result.fieldString == 0 &&
 			result.fieldBool == 1 &&
 			strcmp(result.fieldFixedArr, "Bye") == 0);
@@ -611,7 +611,7 @@ public:
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructPtrBadPtr);
 		resultT->fieldString = nullptr;
 		auto result = resultT
-			.copyAndVerify([this](tainted<testStruct, TSandbox>* val) { 
+			.copyAndVerify([this](tainted<testStruct, TSandbox>* val) {
 				testStruct ret;
 				ret.fieldLong = val->fieldLong.copyAndVerify([](unsigned long val) { return val; });
 				ret.fieldString = nullptr;
@@ -683,43 +683,112 @@ public:
 	}
 };
 
+
+
+template<typename T>
+void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBadPointersTest)
+{
+	{
+		SandboxTests<T> sandbox;
+		sandbox.init(runtimePath, libraryPath);
+		sandbox.runTests();
+
+		if(shouldRunBadPointersTest)
+		{
+			sandbox.runBadPointersTest();
+		}
+	}
+
+	using voidPVoidPFunction = void* (*)(void*);
+	voidPVoidPFunction multithreadedCall = [](void* sandboxPtr) -> void* {
+		SandboxTests<T>& sandbox = *((SandboxTests<T> *)sandboxPtr);
+		for(int i = 0; i < 10; i++) {
+			sandbox.runTests();
+		}
+		return 0;
+	};
+
+	{
+		//Multi thread tests
+		#define ThreadCount 4
+		SandboxTests<T> sandbox;
+		pthread_t threads[ThreadCount];
+		sandbox.init(runtimePath, libraryPath);
+
+		for(int i = 0; i < ThreadCount; i++)
+		{
+			pthread_create(&(threads[i]),
+				NULL /* use default thread attributes */,
+				multithreadedCall,
+				(void*) &sandbox
+			);
+		}
+
+		for(int i = 0; i < ThreadCount; i++)
+		{
+			if(pthread_join(threads[i], NULL))
+			{
+				printf("Error joining thread %d\n", i);
+				exit(1);
+			}
+		}
+	}
+
+	{
+		//Multi sandbox tests
+		#define SandboxCount 4
+		SandboxTests<T> sandboxes[SandboxCount];
+		pthread_t threads[SandboxCount];
+		for(int i = 0; i < SandboxCount; i++)
+		{
+			sandboxes[i].init(runtimePath, libraryPath);
+		}
+
+		for(int i = 0; i < SandboxCount; i++)
+		{
+			pthread_create(&(threads[i]),
+				NULL /* use default thread attributes */,
+				multithreadedCall,
+				(void*) &(sandboxes[i])
+			);
+		}
+
+		for(int i = 0; i < SandboxCount; i++)
+		{
+			if(pthread_join(threads[i], NULL))
+			{
+				printf("Error joining thread %d\n", i);
+				exit(1);
+			}
+		}
+	}
+}
+
 int main(int argc, char const *argv[])
 {
 	printf("Testing calls within my app - i.e. no sandbox\n");
-	SandboxTests<RLBox_MyApp> testerMyApp;
-	testerMyApp.init("", "");
-	testerMyApp.runTests();
 	//the RLBox_MyApp doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+	runTests<RLBox_MyApp>("", "", false);
 
 	printf("Testing dyn lib\n");
-	SandboxTests<RLBox_DynLib> testerDynLib;
-	testerDynLib.init("", "./libtest.so");
-	testerDynLib.runTests();
 	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+	runTests<RLBox_DynLib>("", "./libtest.so", false);
 
 	#ifndef NO_NACL
 		printf("Testing NaCl\n");
-		SandboxTests<RLBox_NaCl> testerNaCl;
-		testerNaCl.init(
+		runTests<RLBox_NaCl>(
 		#if defined(_M_IX86) || defined(__i386__)
 		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
 		#else
 		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
 		#endif
-		, "./libtest.nexe");
-		testerNaCl.runTests();
-		testerNaCl.runBadPointersTest();
+		, "./libtest.nexe", true);
 	#endif
 
 	#ifndef NO_WASM
 		#if !(defined(_M_IX86) || defined(__i386__))
 		printf("Testing WASM\n");
-		SandboxTests<RLBox_Wasm> testerWasm;
-		testerWasm.init(
-			""
-			, "./libwasm_test.so");
-		testerWasm.runTests();
-		testerWasm.runBadPointersTest();
+		runTests<RLBox_Wasm>("", "./libwasm_test.so", true);
 		#endif
 	#endif
 
