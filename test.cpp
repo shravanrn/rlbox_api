@@ -50,6 +50,7 @@ class SandboxTests
 {
 public:
 	RLBoxSandbox<TSandbox>* sandbox;
+	sandbox_callback_helper<int(unsigned, const char*, unsigned[1]), TSandbox> registeredCallback;
 
 	void testSizes()
 	{
@@ -254,7 +255,6 @@ public:
 
 	void testCallback()
 	{
-		auto registeredCallback = sandbox->createCallback(exampleCallback);
 		auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), registeredCallback);
 
 		auto result = resultT
@@ -278,7 +278,6 @@ public:
 	void testCallbackOnStruct()
 	{
 		tainted<testStruct, TSandbox> foo;
-		auto registeredCallback = sandbox->createCallback(exampleCallback);
 		foo.fieldFnPtr = registeredCallback;
 
 		tainted<testStruct*, TSandbox> pFoo = sandbox->template mallocInSandbox<testStruct>();
@@ -636,6 +635,7 @@ public:
 	void init(const char* runtimePath, const char* libraryPath)
 	{
 		sandbox = RLBoxSandbox<TSandbox>::createSandbox(runtimePath, libraryPath);
+		registeredCallback = sandbox->createCallback(exampleCallback);
 	}
 
 	void runTests()
@@ -700,7 +700,7 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 	}
 
 	using voidPVoidPFunction = void* (*)(void*);
-	voidPVoidPFunction multithreadedCall = [](void* sandboxPtr) -> void* {
+	voidPVoidPFunction testInvoker = [](void* sandboxPtr) -> void* {
 		SandboxTests<T>& sandbox = *((SandboxTests<T> *)sandboxPtr);
 		for(int i = 0; i < 10; i++) {
 			sandbox.runTests();
@@ -719,7 +719,7 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 		{
 			pthread_create(&(threads[i]),
 				NULL /* use default thread attributes */,
-				multithreadedCall,
+				testInvoker,
 				(void*) &sandbox
 			);
 		}
@@ -748,7 +748,7 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 		{
 			pthread_create(&(threads[i]),
 				NULL /* use default thread attributes */,
-				multithreadedCall,
+				testInvoker,
 				(void*) &(sandboxes[i])
 			);
 		}
