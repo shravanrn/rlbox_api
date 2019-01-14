@@ -191,7 +191,7 @@ public:
 	inline bool impl_isValidSandboxedPointer(const void* p, bool isFuncPtr)
 	{
 		if (isFuncPtr) {
-			return sandbox->getUnsandboxedFuncPointer(p) != nullptr;
+			return p == nullptr || sandbox->getUnsandboxedFuncPointer(p) != nullptr;
 		} else {
 			return ((uintptr_t) p) < sandbox->getTotalMemory();
 		}

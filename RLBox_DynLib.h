@@ -41,7 +41,7 @@ private:
 	void* libHandle = nullptr;
 	int pushPopCount = 0;
 
-	template<unsigned int N, typename TRet, typename... TArgs> 
+	template<unsigned int N, typename TRet, typename... TArgs>
 	static TRet impl_CallbackReceiver(TArgs... params)
 	{
 		using fnType = TRet(*)(TArgs..., void*);
@@ -71,7 +71,7 @@ private:
 public:
 	inline void impl_CreateSandbox(const char* sandboxRuntimePath, const char* libraryPath)
 	{
-		libHandle = dlopen(libraryPath, RTLD_LAZY);
+		libHandle = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY);
 		if(!libHandle)
 		{
 			printf("Library Load Failed: %s\n", libraryPath);

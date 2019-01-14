@@ -1074,7 +1074,11 @@ namespace rlbox
 		inline valid_return_t<T> copyAndVerifyAppPtr(RLBoxSandbox<TSandbox>* sandbox, std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			auto p_appPtrMap = sandbox->getMaintainAppPtrMap();
-			auto it = p_appPtrMap->find((void*) field);
+			auto& ref_appPtrMapMtx = *(sandbox->getMaintainAppPtrMapMutex());
+			std::lock_guard<std::mutex> lock(ref_appPtrMapMtx);
+
+			auto fieldMask = (void*)(((uintptr_t)field) & 0xFFFFFFFF);
+			auto it = p_appPtrMap->find(fieldMask);
 			T val = nullptr;
 			if (it != p_appPtrMap->end()) {
 				val = (T) it->second;
@@ -1940,6 +1944,7 @@ namespace rlbox
 		{
 			auto p_appPtrMap = getMaintainAppPtrMap();
 
+			std::lock_guard<std::mutex> lock(this->impl_MaintainAppPtrMapMutex);
 			bool found = false;
 			T* key;
 			for (auto it = p_appPtrMap->begin(); it != p_appPtrMap->end(); it++)
@@ -1954,7 +1959,6 @@ namespace rlbox
 
 			if (!found)
 			{
-				std::lock_guard<std::mutex> lock(this->impl_MaintainAppPtrMapMutex);
 				this->impl_MaintainAppPtrMapCounter++;
 				key = (T*)(uintptr_t)this->impl_MaintainAppPtrMapCounter;
 				(*p_appPtrMap)[(void*)key] = (void*) arg;
@@ -1976,6 +1980,11 @@ namespace rlbox
 			memset((void*)argInSandbox, 0, size);
 
 			return sandbox_stackarr_helper<T, TSandbox>(this, argInSandbox, size);
+		}
+
+		inline std::mutex* getMaintainAppPtrMapMutex()
+		{
+			return &(this->impl_MaintainAppPtrMapMutex);
 		}
 
 		template <typename T>
