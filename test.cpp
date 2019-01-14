@@ -686,7 +686,7 @@ public:
 
 
 template<typename T>
-void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBadPointersTest)
+void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBadPointersTest, bool shouldRunThreadingTests)
 {
 	{
 		SandboxTests<T> sandbox;
@@ -707,6 +707,11 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 		}
 		return 0;
 	};
+
+	if(!shouldRunThreadingTests)
+	{
+		return;
+	}
 
 	{
 		//Multi thread tests
@@ -768,11 +773,11 @@ int main(int argc, char const *argv[])
 {
 	printf("Testing calls within my app - i.e. no sandbox\n");
 	//the RLBox_MyApp doesn't mask bad pointers, so can't test with 'runBadPointersTest'
-	runTests<RLBox_MyApp>("", "", false);
+	runTests<RLBox_MyApp>("", "", false, false);
 
 	printf("Testing dyn lib\n");
 	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
-	runTests<RLBox_DynLib>("", "./libtest.so", false);
+	runTests<RLBox_DynLib>("", "./libtest.so", false, false);
 
 	#ifndef NO_NACL
 		printf("Testing NaCl\n");
@@ -782,13 +787,13 @@ int main(int argc, char const *argv[])
 		#else
 		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
 		#endif
-		, "./libtest.nexe", true);
+		, "./libtest.nexe", true, false);
 	#endif
 
 	#ifndef NO_WASM
 		#if !(defined(_M_IX86) || defined(__i386__))
 		printf("Testing WASM\n");
-		runTests<RLBox_Wasm>("", "./libwasm_test.so", true);
+		runTests<RLBox_Wasm>("", "./libwasm_test.so", true, false);
 		#endif
 	#endif
 
