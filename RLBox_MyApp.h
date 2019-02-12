@@ -172,6 +172,7 @@ public:
 		return result;
 	}
 
+	template<typename TFunc>
 	inline void impl_UnregisterCallback(void* key)
 	{
 		std::lock_guard<std::mutex> lock(callbackMutex);
@@ -187,7 +188,7 @@ public:
 		}
 	}
 
-	inline void* impl_LookupSymbol(const char* name)
+	inline void* impl_LookupSymbol(const char* name, bool forSandboxFunction)
 	{
 		auto ret = dlsym(libHandle, name);
 		if(!ret)

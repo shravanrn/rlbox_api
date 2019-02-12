@@ -410,7 +410,7 @@ namespace rlbox
 		{
 			if(registeredCallback != nullptr)
 			{
-				sandbox->impl_UnregisterCallback(stateObject->actualCallback);
+				sandbox->template impl_UnregisterCallback<T>(stateObject->actualCallback);
 				delete stateObject;
 			}
 		}
@@ -1908,7 +1908,7 @@ namespace rlbox
 			return val;
 		}
 
-		void* getFunctionPointerFromCache(const char* fnName)
+		void* getFunctionPointerFromCache(const char* fnName, bool forSandboxFunction)
 		{
 			void* fnPtr;
 			std::lock_guard<std::mutex> lock(functionPointerCacheLock);
@@ -1922,7 +1922,7 @@ namespace rlbox
 
 			if(fnPtrRef == fnMapTyped.end())
 			{
-				fnPtr = this->impl_LookupSymbol(fnName);
+				fnPtr = this->impl_LookupSymbol(fnName, forSandboxFunction);
 				fnMapTyped[fnName] = fnPtr;
 			}
 			else
@@ -2075,10 +2075,10 @@ namespace rlbox
 		return dest;
 	}
 
-	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
-	#define sandbox_invoke_return_app_ptr(sandbox, fnName, ...) sandbox->invokeWithFunctionPointerReturnAppPtr((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName), ##__VA_ARGS__)
+	#define sandbox_invoke(sandbox, fnName, ...) sandbox->invokeWithFunctionPointer((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName, false), ##__VA_ARGS__)
+	#define sandbox_invoke_return_app_ptr(sandbox, fnName, ...) sandbox->invokeWithFunctionPointerReturnAppPtr((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName, false), ##__VA_ARGS__)
 	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
-	#define sandbox_function(sandbox, fnName) sandbox_convertToUnverified<decltype(fnName)*>(sandbox, (decltype(fnName)*) sandbox->getFunctionPointerFromCache(#fnName))
+	#define sandbox_function(sandbox, fnName) sandbox_convertToUnverified<decltype(fnName)*>(sandbox, (decltype(fnName)*) sandbox->getFunctionPointerFromCache(#fnName, true))
 	#undef UNUSED
 }
 #endif

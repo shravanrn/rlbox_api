@@ -531,6 +531,7 @@ public:
 		return (void*) registerSandboxCallbackWithState(sandbox, slotNumber, (uintptr_t) impl_CallbackReceiver<TRet, TArgs...>, (void*) stateWrapper);
 	}
 
+	template<typename TFunc>
 	inline void impl_UnregisterCallback(void* key)
 	{
 		std::lock_guard<std::mutex> lock(callbackMutex);
@@ -545,7 +546,7 @@ public:
 		}
 	}
 
-	inline void* impl_LookupSymbol(const char* name)
+	inline void* impl_LookupSymbol(const char* name, bool forSandboxFunction)
 	{
 		auto ret = symbolTableLookupInSandbox(sandbox, name);
 		if(!ret)

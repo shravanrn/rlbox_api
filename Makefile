@@ -11,9 +11,20 @@ ifeq ($(origin CXX),default)
 	CXX = g++
 endif
 CFLAGS ?= -g3
+PROCESS_SANDBOX_DIR=$(shell realpath ../ProcessSandbox)
 SANDBOXING_NACL_DIR=$(shell realpath ../Sandboxing_NaCl)
 WASM_SANDBOX_DIR?=$(shell realpath ../wasm-sandboxing)
 EMSDK_DIR?=$(shell realpath ../emsdk)
+
+ifeq ($(NO_PROCESS),1)
+	PROCESS_INCLUDES=-DNO_PROCESS
+	PROCESS_LIBS32=
+	PROCESS_LIBS64=
+else
+	PROCESS_INCLUDES=-I$(PROCESS_SANDBOX_DIR) -I.
+	PROCESS_LIBS32=-lpthread -lrt -lseccomp -L$(PROCESS_SANDBOX_DIR) -lProcessSandbox_rlboxtest32
+	PROCESS_LIBS64=-lpthread -lrt -lseccomp -L$(PROCESS_SANDBOX_DIR) -lProcessSandbox_rlboxtest64
+endif
 ifeq ($(NO_NACL),1)
 	NACL_INCLUDES=-DNO_NACL
 	NACL_LIBS_32=
@@ -43,7 +54,7 @@ mkdir_out:
 	mkdir -p ./out/x64
 
 out/x32/test: mkdir_out $(CURDIR)/test.cpp $(CURDIR)/rlbox.h $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
-	$(CXX) -m32 $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 $(CFLAGS) -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic $(NACL_LIBS_32)  -ldl -lpthread -o $@
+	$(CXX) -m32 $(PROCESS_INCLUDES) $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 $(CFLAGS) -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic $(PROCESS_LIBS32) $(NACL_LIBS_32)  -ldl -lpthread -o $@
 
 out/x32/libtest.so: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 	$(CXX) -m32 -std=c++11 $(CFLAGS) -shared -fPIC $(CURDIR)/libtest.cpp -o $@
@@ -56,7 +67,7 @@ out/x32/libtest.nexe: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 endif
 
 out/x64/test: mkdir_out $(CURDIR)/test.cpp $(CURDIR)/rlbox.h $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
-	$(CXX) $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 $(CFLAGS) -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic $(NACL_LIBS_64) $(WASM_LIBS_64) -ldl -lpthread -o $@
+	$(CXX) $(PROCESS_INCLUDES) $(NACL_INCLUDES) $(WASM_INCLUDES) -std=c++14 $(CFLAGS) -Wall $(CURDIR)/test.cpp $(CURDIR)/libtest.cpp -Wl,--export-dynamic $(PROCESS_LIBS64) $(NACL_LIBS_64) $(WASM_LIBS_64) -ldl -lpthread -o $@
 
 out/x64/libtest.so: mkdir_out $(CURDIR)/libtest.cpp $(CURDIR)/libtest.h
 	$(CXX) -std=c++11 $(CFLAGS) -shared -fPIC $(CURDIR)/libtest.cpp -o $@

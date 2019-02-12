@@ -6,6 +6,10 @@
 #include "libtest.h"
 #include "RLBox_MyApp.h"
 #include "RLBox_DynLib.h"
+#ifndef NO_PROCESS
+	#define USE_RLBOXTEST
+	#include "RLBox_Process.h"
+#endif
 #ifndef NO_NACL
 	#include "RLBox_NaCl.h"
 #endif
@@ -23,7 +27,7 @@ using namespace rlbox;
 //////////////////////////////////////////////////////////////////
 
 template<typename... T>
-void printTypes()
+void printTypesHelper()
 {
 	#ifdef _MSC_VER
  		printf("%s\n", __FUNCSIG__);
@@ -36,6 +40,9 @@ void printTypes()
 
 rlbox_load_library_api(testlib, RLBox_MyApp)
 rlbox_load_library_api(testlib, RLBox_DynLib)
+#ifndef NO_PROCESS
+	rlbox_load_library_api(testlib, RLBox_Process<RLBoxTestProcessSandbox>)
+#endif
 #ifndef NO_NACL
 	rlbox_load_library_api(testlib, RLBox_NaCl)
 #endif
@@ -339,14 +346,14 @@ public:
 		ENSURE(resultD == 3.0);
 	}
 
-	void testStructures()
+	void testStructures(bool ignoreGlobalStringsInLib)
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructVal);
 		auto result = resultT
-			.copyAndVerify([this](tainted<testStruct, TSandbox>& val){
+			.copyAndVerify([this, ignoreGlobalStringsInLib](tainted<testStruct, TSandbox>& val){
 				testStruct ret;
 				ret.fieldLong = val.fieldLong.copyAndVerify([](unsigned long val) { return val; });
-				ret.fieldString = val.fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+				ret.fieldString = ignoreGlobalStringsInLib? "Hello" : val.fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
 				ret.fieldBool = val.fieldBool.copyAndVerify([](unsigned int val) { return val; });
 				val.fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
 				return ret;
@@ -362,14 +369,14 @@ public:
 		ENSURE(val == 17);
 	}
 
-	void testStructurePointers()
+	void testStructurePointers(bool ignoreGlobalStringsInLib)
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructPtr);
 		auto result = resultT
-			.copyAndVerify([this](tainted<testStruct, TSandbox>* val) {
+			.copyAndVerify([this, ignoreGlobalStringsInLib](tainted<testStruct, TSandbox>* val) {
 				testStruct ret;
 				ret.fieldLong = val->fieldLong.copyAndVerify([](unsigned long val) { return val; });
-				ret.fieldString = val->fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
+				ret.fieldString = ignoreGlobalStringsInLib? "Hello" : val->fieldString.copyAndVerifyString(sandbox, [](const char* val) { return strlen(val) < 100? RLBox_Verify_Status::SAFE : RLBox_Verify_Status::UNSAFE; }, nullptr);
 				ret.fieldBool = val->fieldBool.copyAndVerify([](unsigned int val) { return val; });
 				val->fieldFixedArr.copyAndVerify(ret.fieldFixedArr, sizeof(ret.fieldFixedArr), [](char* arr, size_t size){ UNUSED(arr); UNUSED(size); return RLBox_Verify_Status::SAFE; });
 				return ret;
@@ -638,7 +645,7 @@ public:
 		registeredCallback = sandbox->createCallback(exampleCallback);
 	}
 
-	void runTests()
+	void runTests(bool ignoreGlobalStringsInLib)
 	{
 		testSizes();
 		testAssignment();
@@ -663,8 +670,8 @@ public:
 		testEchoAndPointerLocations();
 		testFloatingPoint();
 		testPointerValAdd();
-		testStructures();
-		testStructurePointers();
+		testStructures(ignoreGlobalStringsInLib);
+		testStructurePointers(ignoreGlobalStringsInLib);
 		testStatefulLambdas();
 		testAppPtrFunctionReturn();
 		testPointersInStruct();
@@ -686,12 +693,12 @@ public:
 
 
 template<typename T>
-void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBadPointersTest, bool shouldRunThreadingTests)
+void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBadPointersTest, bool shouldRunThreadingTests, bool ignoreGlobalStringsInLib)
 {
 	{
 		SandboxTests<T> sandbox;
 		sandbox.init(runtimePath, libraryPath);
-		sandbox.runTests();
+		sandbox.runTests(ignoreGlobalStringsInLib);
 
 		if(shouldRunBadPointersTest)
 		{
@@ -700,13 +707,25 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 	}
 
 	using voidPVoidPFunction = void* (*)(void*);
-	voidPVoidPFunction testInvoker = [](void* sandboxPtr) -> void* {
-		SandboxTests<T>& sandbox = *((SandboxTests<T> *)sandboxPtr);
-		for(int i = 0; i < 10; i++) {
-			sandbox.runTests();
-		}
-		return 0;
-	};
+	voidPVoidPFunction testInvoker;
+	if (ignoreGlobalStringsInLib) {
+		testInvoker = [](void* sandboxPtr) -> void* {
+			SandboxTests<T>& sandbox = *((SandboxTests<T> *)sandboxPtr);
+			for(int i = 0; i < 10; i++) {
+				sandbox.runTests(true);
+			}
+			return 0;
+		};
+	} else {
+		testInvoker = [](void* sandboxPtr) -> void* {
+			SandboxTests<T>& sandbox = *((SandboxTests<T> *)sandboxPtr);
+			for(int i = 0; i < 10; i++) {
+				sandbox.runTests(false);
+			}
+			return 0;
+		};
+
+	}
 
 	if(!shouldRunThreadingTests)
 	{
@@ -771,31 +790,43 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 
 int main(int argc, char const *argv[])
 {
-	printf("Testing calls within my app - i.e. no sandbox\n");
-	//the RLBox_MyApp doesn't mask bad pointers, so can't test with 'runBadPointersTest'
-	runTests<RLBox_MyApp>("", "", false, false);
+	// printf("Testing calls within my app - i.e. no sandbox\n");
+	// //the RLBox_MyApp doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+	// runTests<RLBox_MyApp>("", "", false, false, false);
 
-	printf("Testing dyn lib\n");
-	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
-	runTests<RLBox_DynLib>("", "./libtest.so", false, false);
+	// printf("Testing dyn lib\n");
+	// //the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+	// runTests<RLBox_DynLib>("", "./libtest.so", false, false, false);
 
-	#ifndef NO_NACL
-		printf("Testing NaCl\n");
-		runTests<RLBox_NaCl>(
+	#ifndef NO_PROCESS
+		printf("Testing Process\n");
+		runTests<RLBox_Process<RLBoxTestProcessSandbox>>(
+		"",
 		#if defined(_M_IX86) || defined(__i386__)
-		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
+		"../../../ProcessSandbox/ProcessSandbox_otherside_rlboxtest32"
 		#else
-		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
+		"../../../ProcessSandbox/ProcessSandbox_otherside_rlboxtest64"
 		#endif
-		, "./libtest.nexe", true, false);
+		, false, false, true);
 	#endif
 
-	#ifndef NO_WASM
-		#if !(defined(_M_IX86) || defined(__i386__))
-		printf("Testing WASM\n");
-		runTests<RLBox_Wasm>("", "./libwasm_test.so", true, false);
-		#endif
-	#endif
+	// #ifndef NO_NACL
+	// 	printf("Testing NaCl\n");
+	// 	runTests<RLBox_NaCl>(
+	// 	#if defined(_M_IX86) || defined(__i386__)
+	// 	"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
+	// 	#else
+	// 	"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
+	// 	#endif
+	// 	, "./libtest.nexe", true, false, false);
+	// #endif
+
+	// #ifndef NO_WASM
+	// 	#if !(defined(_M_IX86) || defined(__i386__))
+	// 	printf("Testing WASM\n");
+	// 	runTests<RLBox_Wasm>("", "./libwasm_test.so", true, false, false);
+	// 	#endif
+	// #endif
 
 	return 0;
 }
