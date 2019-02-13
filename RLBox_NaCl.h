@@ -68,6 +68,7 @@ private:
 	std::once_flag initFlag;
 	std::mutex callbackMutex;
 	#if defined(_M_IX86) || defined(__i386__)
+		static std::mutex sandboxListMutex;
 		static std::vector<NaClSandbox*> sandboxList;
 	#endif
 
@@ -328,8 +329,23 @@ public:
 		}
 		sandbox->extraState = (void*) this;
 		#if defined(_M_IX86) || defined(__i386__)
+			std::lock_guard<std::mutex> lock(sandboxListMutex);
 			sandboxList.push_back(sandbox);
 		#endif
+	}
+
+	inline void impl_DestroySandbox()
+	{
+		#if defined(_M_IX86) || defined(__i386__)
+			std::lock_guard<std::mutex> lock(sandboxListMutex);
+			sandboxList.erase(std::remove(sandboxList.begin(), sandboxList.end(), sandbox), sandboxList.end());
+		#endif
+		destroyDlSandbox(sandbox);
+	}
+
+	inline NaClSandbox* impl_getSandbox()
+	{
+		return sandbox;
 	}
 
 	inline void* impl_mallocInSandbox(size_t size)
@@ -392,6 +408,7 @@ public:
 	static inline void* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
+			std::lock_guard<std::mutex> lock(sandboxListMutex);
 			for(NaClSandbox* sandbox : sandboxList)
 			{
 				size_t memSize = 0x3FFFFFFF;
@@ -420,6 +437,7 @@ public:
 	static inline void* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
+			std::lock_guard<std::mutex> lock(sandboxListMutex);
 			for(NaClSandbox* sandbox : sandboxList)
 			{
 				size_t memSize = 0x3FFFFFFF;
@@ -482,6 +500,7 @@ public:
 	static inline T* impl_pointerIncrement(T* p, int64_t increment)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
+			std::lock_guard<std::mutex> lock(sandboxListMutex);
 			for(NaClSandbox* sandbox : sandboxList)
 			{
 				size_t memSize = 0x3FFFFFFF;
@@ -580,6 +599,7 @@ public:
 };
 
 #if defined(_M_IX86) || defined(__i386__)
+	std::mutex RLBox_NaCl::sandboxListMutex __attribute__((weak));
 	std::vector<NaClSandbox*> RLBox_NaCl::sandboxList __attribute__((weak));
 #endif
 

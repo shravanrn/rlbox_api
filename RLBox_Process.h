@@ -9,6 +9,7 @@
 #include <mutex>
 #include <limits>
 #include <map>
+#include <algorithm>
 #include "ProcessSandbox.h"
 
 namespace RLBox_Process_detail {
@@ -42,6 +43,7 @@ class RLBox_Process
 {
 private:
 	static thread_local RLBox_Process* dynLib_SavedState;
+	static std::mutex sandboxListMutex;
 	static std::vector<TProcSandbox*> sandboxList;
 	std::mutex callbackMutex;
 	std::map<void*, void*> callbackKVMap;
@@ -69,8 +71,21 @@ public:
 			printf("Could not open symbol table of my app\n");
 			abort();
 		}
-		procSandbox = new TProcSandbox(libraryPath, 1, 5, 0);
+		procSandbox = new TProcSandbox(libraryPath, 1, 3);
+		std::lock_guard<std::mutex> lock(sandboxListMutex);
 		sandboxList.push_back(procSandbox);
+	}
+
+	inline void impl_DestroySandbox()
+	{
+		std::lock_guard<std::mutex> lock(sandboxListMutex);
+		sandboxList.erase(std::remove(sandboxList.begin(), sandboxList.end(), procSandbox), sandboxList.end());
+		procSandbox->destroySandbox();
+	}
+
+	inline TProcSandbox* impl_getSandbox()
+	{
+		return procSandbox;
 	}
 
 	inline void* impl_mallocInSandbox(size_t size)
@@ -128,7 +143,11 @@ public:
 	template<typename T>
 	inline void* impl_GetUnsandboxedPointer(T* p)
 	{
-		return const_cast<void*>((const void*)p);
+		if (impl_isPointerInSandboxMemoryOrNull((const void*)p)) {
+			return const_cast<void*>((const void*)p);
+		} else {
+			return nullptr;
+		}		
 	}
 
 	template<typename T>
@@ -163,6 +182,7 @@ public:
 	template<typename T>
 	static inline T* impl_pointerIncrement(T* p, int64_t increment)
 	{
+		std::lock_guard<std::mutex> lock(sandboxListMutex);
 		for(TProcSandbox* sandbox : sandboxList)
 		{
 			size_t memSize = getTotalMemoryHelper();
@@ -257,6 +277,9 @@ public:
 
 template<typename TProcSandbox>
 thread_local RLBox_Process<TProcSandbox>* RLBox_Process<TProcSandbox>::dynLib_SavedState = nullptr;
+
+template<typename TProcSandbox>
+std::mutex RLBox_Process<TProcSandbox>::sandboxListMutex __attribute__((weak));
 
 template<typename TProcSandbox>
 std::vector<TProcSandbox*> RLBox_Process<TProcSandbox>::sandboxList __attribute__((weak));

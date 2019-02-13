@@ -80,6 +80,15 @@ public:
 		}
 	}
 
+	inline void impl_DestroySandbox()
+	{
+	}
+
+	inline void* impl_getSandbox()
+	{
+		return libHandle;
+	}
+
 	inline void* impl_mallocInSandbox(size_t size)
 	{
 		return malloc(size);

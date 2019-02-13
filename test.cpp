@@ -59,6 +59,12 @@ public:
 	RLBoxSandbox<TSandbox>* sandbox;
 	sandbox_callback_helper<int(unsigned, const char*, unsigned[1]), TSandbox> registeredCallback;
 
+	void testGetSandbox()
+	{
+		auto rawSandbox = sandbox->getSandbox();
+		UNUSED(rawSandbox);
+	}
+
 	void testSizes()
 	{
 		ENSURE(sizeof(tainted<long, TSandbox>) == sizeof(long));
@@ -257,7 +263,9 @@ public:
 			printf("Unexpected callback value: %d, %d\n", cCopy[0] + 1, aCopy);
 			exit(1);
 		}
-		return aCopy + strlen(bCopy);
+		auto ret = aCopy + strlen(bCopy);
+		free((void*)bCopy);
+		return ret;
 	}
 
 	void testCallback()
@@ -315,6 +323,7 @@ public:
 		ENSURE(isStringSame);
 
 		sandbox->freeInSandbox(temp);
+		free(retStr);
 	}
 
 	void testFloatingPoint()
@@ -339,7 +348,7 @@ public:
 		tainted<double*, TSandbox> pd = sandbox->template mallocInSandbox<double>();
 		*pd = 1.0;
 
-		double d = 2.0d;
+		double d = 2.0;
 
 		auto resultD = sandbox_invoke(sandbox, simplePointerValAddTest, pd, d)
 			.copyAndVerify([](double val){ return val > 0 && val < 100? val : -1.0; });
@@ -434,7 +443,7 @@ public:
 		auto initVal = sandbox->template mallocInSandbox<char>();
 		auto resultT = sandbox_invoke(sandbox, initializePointerStruct, initVal);
 		auto result = resultT
-			.copyAndVerify([this](tainted<pointersStruct, TSandbox>& val){
+			.copyAndVerify([](tainted<pointersStruct, TSandbox>& val){
 				pointersStruct ret;
 				ret.firstPointer = val.firstPointer.UNSAFE_Unverified();
 				ret.pointerArray[0] = val.pointerArray[0].UNSAFE_Unverified();
@@ -542,6 +551,10 @@ public:
 		for(int i = 0; i < 4; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
 		for(int i = 4; i < 8; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0xFFFFFFFF); }
 		for(int i = 8; i < 12; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
+
+		free(src2);
+		sandbox->template freeInSandbox(src);
+		sandbox->template freeInSandbox(dest);
 	}
 
 	void testFrozenValues()
@@ -598,7 +611,7 @@ public:
 	{
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructValBadPtr);
 		auto result = resultT
-			.copyAndVerify([this](tainted<testStruct, TSandbox>& val){ 
+			.copyAndVerify([](tainted<testStruct, TSandbox>& val){ 
 				testStruct ret;
 				ret.fieldLong = val.fieldLong.copyAndVerify([](unsigned long val) { return val; });
 				ret.fieldString = val.fieldString.UNSAFE_Unverified();
@@ -617,7 +630,7 @@ public:
 		auto resultT = sandbox_invoke(sandbox, simpleTestStructPtrBadPtr);
 		resultT->fieldString = nullptr;
 		auto result = resultT
-			.copyAndVerify([this](tainted<testStruct, TSandbox>* val) {
+			.copyAndVerify([](tainted<testStruct, TSandbox>* val) {
 				testStruct ret;
 				ret.fieldLong = val->fieldLong.copyAndVerify([](unsigned long val) { return val; });
 				ret.fieldString = nullptr;
@@ -645,8 +658,16 @@ public:
 		registeredCallback = sandbox->createCallback(exampleCallback);
 	}
 
+	void finish()
+	{
+		registeredCallback.unregister();
+		sandbox->destroySandbox();
+	}
+
+
 	void runTests(bool ignoreGlobalStringsInLib)
 	{
+		testGetSandbox();
 		testSizes();
 		testAssignment();
 		testBinaryOperators();
@@ -704,6 +725,8 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 		{
 			sandbox.runBadPointersTest();
 		}
+
+		sandbox.finish();
 	}
 
 	using voidPVoidPFunction = void* (*)(void*);
@@ -756,6 +779,8 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 				exit(1);
 			}
 		}
+
+		sandbox.finish();
 	}
 
 	{
@@ -785,18 +810,23 @@ void runTests(const char* runtimePath, const char* libraryPath, bool shouldRunBa
 				exit(1);
 			}
 		}
+
+		for(int i = 0; i < SandboxCount; i++)
+		{
+			sandboxes[i].finish();
+		}
 	}
 }
 
 int main(int argc, char const *argv[])
 {
-	// printf("Testing calls within my app - i.e. no sandbox\n");
-	// //the RLBox_MyApp doesn't mask bad pointers, so can't test with 'runBadPointersTest'
-	// runTests<RLBox_MyApp>("", "", false, false, false);
+	printf("Testing calls within my app - i.e. no sandbox\n");
+	//the RLBox_MyApp doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+	runTests<RLBox_MyApp>("", "", false, false, false);
 
-	// printf("Testing dyn lib\n");
-	// //the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
-	// runTests<RLBox_DynLib>("", "./libtest.so", false, false, false);
+	printf("Testing dyn lib\n");
+	//the RLBox_DynLib doesn't mask bad pointers, so can't test with 'runBadPointersTest'
+	runTests<RLBox_DynLib>("", "./libtest.so", false, false, false);
 
 	#ifndef NO_PROCESS
 		printf("Testing Process\n");
@@ -810,23 +840,23 @@ int main(int argc, char const *argv[])
 		, false, false, true);
 	#endif
 
-	// #ifndef NO_NACL
-	// 	printf("Testing NaCl\n");
-	// 	runTests<RLBox_NaCl>(
-	// 	#if defined(_M_IX86) || defined(__i386__)
-	// 	"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
-	// 	#else
-	// 	"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
-	// 	#endif
-	// 	, "./libtest.nexe", true, false, false);
-	// #endif
+	#ifndef NO_NACL
+		printf("Testing NaCl\n");
+		runTests<RLBox_NaCl>(
+		#if defined(_M_IX86) || defined(__i386__)
+		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-32/staging/irt_core.nexe"
+		#else
+		"../../../Sandboxing_NaCl/native_client/scons-out-firefox/nacl_irt-x86-64/staging/irt_core.nexe"
+		#endif
+		, "./libtest.nexe", true, false, false);
+	#endif
 
-	// #ifndef NO_WASM
-	// 	#if !(defined(_M_IX86) || defined(__i386__))
-	// 	printf("Testing WASM\n");
-	// 	runTests<RLBox_Wasm>("", "./libwasm_test.so", true, false, false);
-	// 	#endif
-	// #endif
+	#ifndef NO_WASM
+		#if !(defined(_M_IX86) || defined(__i386__))
+		printf("Testing WASM\n");
+		runTests<RLBox_Wasm>("", "./libwasm_test.so", true, false, false);
+		#endif
+	#endif
 
 	return 0;
 }

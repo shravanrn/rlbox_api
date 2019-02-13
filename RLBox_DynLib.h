@@ -79,6 +79,20 @@ public:
 		}
 	}
 
+	inline void impl_DestroySandbox()
+	{
+		int err = dlclose(libHandle);
+		if(!err)
+		{
+			printf("Error closing DynLib sandbox\n");
+		}
+	}
+
+	inline void* impl_getSandbox()
+	{
+		return libHandle;
+	}
+
 	inline void* impl_mallocInSandbox(size_t size)
 	{
 		return malloc(size);

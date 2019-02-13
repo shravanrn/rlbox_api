@@ -18,32 +18,23 @@
 #include <mutex>
 
 namespace rlbox_detail {
-	//https://en.wikibooks.org/wiki/More_C++_Idioms/Member_Detector
-	#define GENERATE_HAS_MEMBER(member)													\
-	template <class T>																	\
-	class HasMember_##member {															\
-	private:																			\
-		using Yes = char[2];															\
-		using  No = char[1];															\
-		struct Fallback { int member; };												\
-		struct Derived : T, Fallback { };												\
-																						\
-		template < class U >															\
-		static No& test ( decltype(U::member)* );										\
-		template < typename U >															\
-		static Yes& test ( U* );														\
-																						\
-	public:																				\
-		static constexpr bool RESULT = sizeof(test<Derived>(nullptr)) == sizeof(Yes); 	\
-	};																					\
-																						\
-	template < class T >																\
-	struct has_member_##member : public std::integral_constant<bool, HasMember_##member<T>::RESULT>{}
+	//https://stackoverflow.com/questions/13786888/check-if-member-exists-using-enable-if
+	#define GENERATE_HAS_MEMBER(member)                                                        \
+	struct TagDoesNotHaveMember_##member {};                                                    \
+	struct TagHasMember_##member : TagDoesNotHaveMember_##member {};                            \
+	template<typename> struct CheckHasMember_##member { typedef int type; };                    \
+																								\
+	template<typename T, typename CheckHasMember_##member<decltype(T::member)>::type = 0>     \
+	std::true_type hasMemberHelper_##member(TagHasMember_##member);                             \
+																								\
+	template<typename T>                                                                        \
+	std::false_type hasMemberHelper_##member(TagDoesNotHaveMember_##member);                    \
+																								\
+	template<typename T>                                                                        \
+	using has_member_##member = decltype(hasMemberHelper_##member<T>(TagHasMember_##member()));
 
-	GENERATE_HAS_MEMBER(impl_Handle32bitPointerArrays);
+	GENERATE_HAS_MEMBER(impl_Handle32bitPointerArrays)
 	#undef GENERATE_HAS_MEMBER
-
-	
 }
 
 #define FIELD_NORMAL 0
@@ -406,13 +397,21 @@ namespace rlbox
 			return *this;
 		}
 
-		~sandbox_callback_helper()
+		void unregister()
 		{
 			if(registeredCallback != nullptr)
 			{
 				sandbox->template impl_UnregisterCallback<T>(stateObject->actualCallback);
 				delete stateObject;
+				this->sandbox = nullptr;
+				this->registeredCallback = nullptr;
+				this->stateObject = nullptr;
 			}
+		}
+
+		~sandbox_callback_helper()
+		{
+			unregister();
 		}
 
 		inline T* UNSAFE_Unverified() const noexcept { return registeredCallback; }
@@ -1064,13 +1063,7 @@ namespace rlbox
 		}
 
 		//app_ptr
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
-		inline valid_return_t<T> copyAndVerifyAppPtr(RLBoxSandbox<TSandbox>* sandbox, std::function<valid_return_t<T>(T)> verifyFunction) const
-		{
-			return verifyFunction(field);
-		}
-
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
 		inline valid_return_t<T> copyAndVerifyAppPtr(RLBoxSandbox<TSandbox>* sandbox, std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			auto p_appPtrMap = sandbox->getMaintainAppPtrMap();
@@ -1532,12 +1525,6 @@ namespace rlbox
 			return ret;
 		}
 
-		inline operator tainted<T, TSandbox>() const 
-		{
-			auto result = UNSAFE_Unverified();
-			return *((tainted<T, TSandbox>*) &result);
-		}
-
 		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
@@ -1786,12 +1773,26 @@ namespace rlbox
 		void* fnPointerMap = nullptr;
 		std::mutex functionPointerCacheLock;
 
+		uint32_t appPtrMapCounter = 0;
+		std::mutex appPtrMapMutex;
+		std::map<void*, void*> appPtrMap;
+
 	public:
 		static RLBoxSandbox* createSandbox(const char* sandboxRuntimePath, const char* libraryPath)
 		{
 			RLBoxSandbox* ret = new RLBoxSandbox();
 			ret->impl_CreateSandbox(sandboxRuntimePath, libraryPath);
 			return ret;
+		}
+		
+		void destroySandbox()
+		{
+			this->impl_DestroySandbox();
+		}
+
+		inline auto getSandbox() -> decltype(this->impl_getSandbox())
+		{
+			return this->impl_getSandbox();
 		}
 
 		template<typename T>
@@ -1887,15 +1888,7 @@ namespace rlbox
 			return ret;
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
-		return_argument<T> invokeWithFunctionPointerReturnAppPtr(T* fnPtr, TArgs&&... params)
-		{
-			// TODO: use std::forward?
-			auto ret = this->impl_InvokeFunctionReturnAppPtr(fnPtr, sandbox_removeWrapper(this, params)...);
-			return ret;
-		}
-
-		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		return_argument<T> invokeWithFunctionPointerReturnAppPtr(T* fnPtr, TArgs&&... params)
 		{
 			auto ret = this->impl_InvokeFunctionReturnAppPtr(fnPtr, sandbox_removeWrapper(this, params)...);
@@ -1932,19 +1925,12 @@ namespace rlbox
 
 			return fnPtr;
 		}
-
-		template<typename T, typename TSandbox2=TSandbox, ENABLE_IF(!rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox2>::value)>
-		inline sandbox_app_ptr_wrapper<T> app_ptr(T* arg)
-		{
-			return sandbox_app_ptr_wrapper<T>(arg);
-		}
-
-		template<typename T, typename TSandbox2=TSandbox, ENABLE_IF(rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox2>::value)>
+		template<typename T>
 		inline sandbox_app_ptr_wrapper<T> app_ptr(T* arg)
 		{
 			auto p_appPtrMap = getMaintainAppPtrMap();
 
-			std::lock_guard<std::mutex> lock(this->impl_MaintainAppPtrMapMutex);
+			std::lock_guard<std::mutex> lock(this->appPtrMapMutex);
 			bool found = false;
 			T* key;
 			for (auto it = p_appPtrMap->begin(); it != p_appPtrMap->end(); it++)
@@ -1959,8 +1945,8 @@ namespace rlbox
 
 			if (!found)
 			{
-				this->impl_MaintainAppPtrMapCounter++;
-				key = (T*)(uintptr_t)this->impl_MaintainAppPtrMapCounter;
+				this->appPtrMapCounter++;
+				key = (T*)(uintptr_t)this->appPtrMapCounter;
 				(*p_appPtrMap)[(void*)key] = (void*) arg;
 			}
 
@@ -1969,7 +1955,7 @@ namespace rlbox
 
 		inline std::map<void*, void*>* getMaintainAppPtrMap()
 		{
-			return &(this->impl_MaintainAppPtrMap);
+			return &(this->appPtrMap);
 		}
 
 		template<typename T>
@@ -1984,7 +1970,7 @@ namespace rlbox
 
 		inline std::mutex* getMaintainAppPtrMapMutex()
 		{
-			return &(this->impl_MaintainAppPtrMapMutex);
+			return &(this->appPtrMapMutex);
 		}
 
 		template <typename T>

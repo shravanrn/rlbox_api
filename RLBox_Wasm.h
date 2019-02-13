@@ -11,6 +11,7 @@ class RLBox_Wasm
 {
 private:
 	WasmSandbox* sandbox;
+	static std::mutex sandboxListMutex;
 	static std::vector<WasmSandbox*> sandboxList;
 	std::mutex callbackMutex;
 	std::mutex threadMutex;
@@ -88,9 +89,6 @@ private:
 public:
 	#if defined(_M_X64) || defined(__x86_64__)
 		static const bool impl_Handle32bitPointerArrays;
-		uint32_t impl_MaintainAppPtrMapCounter = 0;
-		std::mutex impl_MaintainAppPtrMapMutex;
-		std::map<void*, void*> impl_MaintainAppPtrMap;
 	#endif
 
 	inline void impl_CreateSandbox(const char* sandboxRuntimePath, const char* libraryPath)
@@ -102,7 +100,19 @@ public:
 			abort();
 		}
 
+		std::lock_guard<std::mutex> lock(sandboxListMutex);
 		sandboxList.push_back(sandbox);
+	}
+
+	inline void impl_DestroySandbox()
+	{
+		std::lock_guard<std::mutex> lock(sandboxListMutex);
+		sandboxList.erase(std::remove(sandboxList.begin(), sandboxList.end(), sandbox), sandboxList.end());
+	}
+
+	inline WasmSandbox* impl_getSandbox()
+	{
+		return sandbox;
 	}
 
 	inline void* impl_mallocInSandbox(size_t size)
@@ -144,6 +154,7 @@ public:
 	template<typename T>
 	static inline void* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
+		std::lock_guard<std::mutex> lock(sandboxListMutex);
 		for(WasmSandbox* sandbox : sandboxList)
 		{
 			size_t memSize = sandbox->getTotalMemory();
@@ -161,6 +172,7 @@ public:
 	template<typename T>
 	static inline void* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
+		std::lock_guard<std::mutex> lock(sandboxListMutex);
 		for(WasmSandbox* sandbox : sandboxList)
 		{
 			size_t memSize = sandbox->getTotalMemory();
@@ -210,6 +222,7 @@ public:
 	template<typename T>
 	static inline T* impl_pointerIncrement(T* p, int64_t increment)
 	{
+		std::lock_guard<std::mutex> lock(sandboxListMutex);
 		for(WasmSandbox* sandbox : sandboxList)
 		{
 			size_t memSize = sandbox->getTotalMemory();
@@ -284,6 +297,7 @@ public:
 	}
 };
 
+std::mutex RLBox_Wasm::sandboxListMutex __attribute__((weak));
 std::vector<WasmSandbox*> RLBox_Wasm::sandboxList __attribute__((weak));
 
 #endif
