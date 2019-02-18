@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <functional>
 #include <vector>
+#include <algorithm>
 #include "dyn_ldr_lib.h"
 
 namespace RLBox_NaCl_detail {

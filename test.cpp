@@ -170,6 +170,7 @@ public:
 		*ppa = sandbox->template mallocInSandbox<int>();
 		tainted<int, TSandbox> a = **ppa;
 		UNUSED(a);
+		sandbox->freeInSandbox(ppa);
 	}
 
 	void testAddressOfOperators()
@@ -177,6 +178,7 @@ public:
 		tainted<int*, TSandbox> pa = sandbox->template mallocInSandbox<int>();
 		tainted<int*, TSandbox> pa2 = &(*pa);
 		UNUSED(pa2);
+		sandbox->freeInSandbox(pa);
 	}
 
 	void testAppPointer()
@@ -184,6 +186,7 @@ public:
 		tainted<int**, TSandbox> ppa = sandbox->template mallocInSandbox<int*>();
 		int* pa = new int;
 		*ppa = sandbox->app_ptr(pa);
+		sandbox->freeInSandbox(ppa);
 	}
 
 	void testFunctionInvocation()
@@ -435,7 +438,7 @@ public:
 		auto testPtr2 = tempValPtr->fieldString.copyAndVerifyAppPtr(sandbox, [](const char* val){ return val; });
 		ENSURE(testPtr == testPtr2);
 
-		sandbox->template freeInSandbox(tempValPtr);
+		sandbox->freeInSandbox(tempValPtr);
 	}
 
 	void testPointersInStruct()
@@ -553,8 +556,8 @@ public:
 		for(int i = 8; i < 12; i++){ ENSURE(*((dest + i).UNSAFE_Unverified()) == 0); }
 
 		free(src2);
-		sandbox->template freeInSandbox(src);
-		sandbox->template freeInSandbox(dest);
+		sandbox->freeInSandbox(src);
+		sandbox->freeInSandbox(dest);
 	}
 
 	void testFrozenValues()
@@ -583,8 +586,8 @@ public:
 
 		pfa->unfreeze();
 
-		sandbox->template freeInSandbox(pa);
-		sandbox->template freeInSandbox(pfa);
+		sandbox->freeInSandbox(pa);
+		sandbox->freeInSandbox(pfa);
 	}
 
 	void testFrozenStructs() {
@@ -662,6 +665,7 @@ public:
 	{
 		registeredCallback.unregister();
 		sandbox->destroySandbox();
+		free(sandbox);
 	}
 
 

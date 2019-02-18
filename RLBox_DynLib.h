@@ -74,7 +74,7 @@ public:
 		libHandle = dlmopen(LM_ID_NEWLM, libraryPath, RTLD_LAZY);
 		if(!libHandle)
 		{
-			printf("Library Load Failed: %s\n", libraryPath);
+			printf("Library Load Failed: %s. Error %s.\n", libraryPath, dlerror());
 			abort();
 		}
 	}
