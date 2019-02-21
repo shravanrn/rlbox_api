@@ -67,7 +67,7 @@ class RLBox_NaCl
 private:
 	NaClSandbox* sandbox;
 	std::once_flag initFlag;
-	std::mutex callbackMutex;
+	std::mutex createAndCallbackMutex;
 	#if defined(_M_IX86) || defined(__i386__)
 		static std::mutex sandboxListMutex;
 		static std::vector<NaClSandbox*> sandboxList;
@@ -322,7 +322,10 @@ public:
 	inline void impl_CreateSandbox(const char* sandboxRuntimePath, const char* libraryPath)
 	{
 		std::call_once(initFlag, [](){ initializeDlSandboxCreator(0 /* No logging */); });
-		sandbox = createDlSandbox(sandboxRuntimePath, libraryPath);
+		{
+			std::lock_guard<std::mutex> lock(createAndCallbackMutex);
+			sandbox = createDlSandbox(sandboxRuntimePath, libraryPath);
+		}
 		if(!sandbox)
 		{
 			printf("Failed to create sandbox for: %s\n", libraryPath);
@@ -538,7 +541,7 @@ public:
 	template<typename TRet, typename... TArgs>
 	inline void* impl_RegisterCallback(void* key, void* callback, void* state)
 	{
-		std::lock_guard<std::mutex> lock(callbackMutex);
+		std::lock_guard<std::mutex> lock(createAndCallbackMutex);
 
 		unsigned slotNumber;
 		if(!getFreeSandboxCallbackSlot(sandbox, &slotNumber))
@@ -554,7 +557,7 @@ public:
 	template<typename TFunc>
 	inline void impl_UnregisterCallback(void* key)
 	{
-		std::lock_guard<std::mutex> lock(callbackMutex);
+		std::lock_guard<std::mutex> lock(createAndCallbackMutex);
 
 		auto it = callbackSlotInfo.find(key);
 		if(it != callbackSlotInfo.end())
