@@ -115,7 +115,7 @@ namespace rlbox
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//Some additional helpers
 
-	#define ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
+	#define RLBOX_ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
 
 	template<typename T>
 	constexpr bool my_is_one_level_ptr_v = my_is_pointer_v<T> && !my_is_pointer_v<my_remove_pointer_t<T>>;
@@ -483,7 +483,7 @@ namespace rlbox
 		SAFE, UNSAFE
 	};
 
-	template<typename TField, typename T, ENABLE_IF(!my_is_class_v<T> && !my_is_reference_v<T> && !my_is_array_v<T>)>
+	template<typename TField, typename T, RLBOX_ENABLE_IF(!my_is_class_v<T> && !my_is_reference_v<T> && !my_is_array_v<T>)>
 	inline T getFieldCopy(TField field)
 	{
 		T copy = field;
@@ -497,7 +497,7 @@ namespace rlbox
 	{
 	};
 
-	template<typename TRHS, typename TSandbox, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
+	template<typename TRHS, typename TSandbox, template <typename, typename> class TWrap, RLBOX_ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
 	inline TRHS rlboxUnwrapOrReturnValue(const TWrap<TRHS, TSandbox> rhs) noexcept
 	{
 		return rhs.UNSAFE_Unverified();
@@ -539,19 +539,19 @@ namespace rlbox
 		tainted() = default;
 		tainted(const tainted<T, TSandbox>& p) = default;
 
-		template<typename T2=T, ENABLE_IF(!my_is_array_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(!my_is_array_v<T2>)>
 		tainted(const tainted_volatile<T, TSandbox>& p)
 		{
 			field = p.UNSAFE_Unverified();
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && !my_is_pointer_v<my_remove_extent_t<T2>>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2> && !my_is_pointer_v<my_remove_extent_t<T2>>)>
 		tainted(const tainted_volatile<T, TSandbox>& p)
 		{
 			memcpy(field, (void*) p.field, sizeof(T));
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>)>
 		tainted(const tainted_volatile<T, TSandbox>& p)
 		{
 			for(unsigned long i = 0; i < sizeof(field)/sizeof(void*); i++)
@@ -560,7 +560,7 @@ namespace rlbox
 			}
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		tainted(const std::nullptr_t& arg)
 		{
 			field = arg;
@@ -574,7 +574,7 @@ namespace rlbox
 		//we explicitly disable this constructor if it has one of the signatures above, 
 		//	so that we give the above constructors a higher priority
 		//	For now we only allow this for fundamental types as this is potentially unsafe for pointers and structs
-		template<typename Arg, typename... Args, ENABLE_IF(!my_is_base_of_v<tainted_base<T, TSandbox>, my_remove_reference_t<Arg>> && my_is_fundamental_or_enum_v<T>)>
+		template<typename Arg, typename... Args, RLBOX_ENABLE_IF(!my_is_base_of_v<tainted_base<T, TSandbox>, my_remove_reference_t<Arg>> && my_is_fundamental_or_enum_v<T>)>
 		tainted(Arg&& arg, Args&&... args) : field(std::forward<Arg>(arg), std::forward<Args>(args)...) { }
 
 		inline my_decay_if_array_t<T> UNSAFE_Unverified() const noexcept
@@ -582,7 +582,7 @@ namespace rlbox
 			return field;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Unverified_Check_Range(RLBoxSandbox<TSandbox>* sandbox, size_t size) const noexcept
 		{
 			uintptr_t fieldVal = (uintptr_t) UNSAFE_Unverified();
@@ -592,24 +592,24 @@ namespace rlbox
 			return nullptr;
 		}
 
-		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
 		{
 			return field;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Sandboxed(RLBoxSandbox<TSandbox>* sandbox) const noexcept
 		{
 			return (T) sandbox->getSandboxedPointer(field);
 		}
 
-		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2> && !(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>))>
+		template<typename T2=T, RLBOX_ENABLE_IF(!my_is_pointer_v<T2> && !(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>>))>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
 			void** start = (void**) field;
@@ -628,7 +628,7 @@ namespace rlbox
 			}
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2> && my_is_pointer_v<my_remove_extent_t<T2>> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
 			void** start = (void**) field;
@@ -652,7 +652,7 @@ namespace rlbox
 			}
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline void unsandboxPointersOrNull(RLBoxSandbox<TSandbox>* sandbox)
 		{
 			if(sandbox->isValidSandboxedPointer((const void*)field, my_is_function_ptr_v<T>))
@@ -665,7 +665,7 @@ namespace rlbox
 			}
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		void assignPointerInSandbox(RLBoxSandbox<TSandbox>* sandbox, T pointerVal)
 		{
 			if(!sandbox->isPointerInSandboxMemoryOrNull(pointerVal))
@@ -675,20 +675,20 @@ namespace rlbox
 			field = pointerVal;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			return verifyFunction(UNSAFE_Unverified());
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			return verifyFunction(UNSAFE_Unverified()) == RLBox_Verify_Status::SAFE? field : defaultValue;
 		}
 
 		//Non class pointers - one level pointers
-		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
 		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<my_remove_pointer_or_valid_return_t<T>(T)> verifyFunction) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -705,7 +705,7 @@ namespace rlbox
 
 		//Even though this function is not enabled for function types, the C++ compiler complains that this is a function that
 		//	returns a function type
-		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && my_is_class_v<my_remove_pointer_t<T2>>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_one_level_ptr_v<T2> && my_is_class_v<my_remove_pointer_t<T2>>)>
 		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<my_remove_pointer_or_valid_return_t<T>(tainted<my_remove_pointer_t<T>, TSandbox>*)> verifyFunction) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -718,7 +718,7 @@ namespace rlbox
 			return verifyFunction(&maskedField);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2>)>
 		inline bool copyAndVerify(my_decay_noconst_if_array_t<T2> copy, size_t sizeOfCopy, std::function<RLBox_Verify_Status(T, size_t)> verifyFunction) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -779,7 +779,7 @@ namespace rlbox
 			return ret;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted<T, TSandbox>& operator=(const TRHS& arg) noexcept
 		{
 			field = arg;
@@ -789,7 +789,7 @@ namespace rlbox
 		//we don't support app pointers in structs that are maintained in application memory.
 		//so we dont provide operator=(const sandbox_app_ptr_wrapper<TRHS>& arg)
 
-		template<typename TRHS, ENABLE_IF(my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS*>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS*>)>
 		inline tainted<T, TSandbox>& operator=(const sandbox_callback_helper<TRHS, TSandbox>& arg) noexcept
 		{
 			//Generally tainted<T> stores the app version of data while tainted_volatile<T> stores the sandbox version of data
@@ -802,94 +802,94 @@ namespace rlbox
 
 		//we only allow tainted assignment from tainted_freezable if its a simple type
 		//allowing pointers would let users write buggy patterns in code
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS> && my_is_fundamental_or_enum_v<T>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_assignable_v<T&, TRHS> && my_is_fundamental_or_enum_v<T>)>
 		inline tainted<T, TSandbox>& operator=(const tainted_freezable<TRHS, TSandbox>& arg) noexcept
 		{
 			field = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
 			return *this;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted<T, TSandbox>& operator=(const tainted_freezable_volatile<TRHS, TSandbox>& arg) noexcept
 		{
 			field = arg.UNSAFE_Unverified();
 			return *this;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox>& operator=(const std::nullptr_t& arg) noexcept
 		{
 			field = arg;
 			return *this;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
 		{
 			auto& ret = *((tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) field);
 			return ret;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>* operator->()
 		{
 			return (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) UNSAFE_Unverified();
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline bool operator==(const std::nullptr_t& arg) const
 		{
 			return field == arg;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline bool operator!=(const std::nullptr_t& arg) const
 		{
 			return field != arg;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline bool operator!() const
 		{
 			return field == nullptr;
 		}
 
-		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
 			auto result = - UNSAFE_Unverified();
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), rlboxUnwrapOrReturnValue(rhs));
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), - rlboxUnwrapOrReturnValue(rhs));
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
@@ -907,7 +907,7 @@ namespace rlbox
 			return *retPtr;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2>)>
 		inline tainted<my_remove_extent_t<T>, TSandbox>& operator[] (size_t x) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -946,32 +946,32 @@ namespace rlbox
 		tainted_volatile() = default;
 		tainted_volatile(const tainted_volatile<T, TSandbox>& p) = default;
 
-		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getAppSwizzledValue(my_add_volatile_t<T> arg, void* exampleUnsandboxedPtr) const
 		{
 			return (my_decay_if_array_t<T>) arg;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getAppSwizzledValue(my_add_volatile_t<T> arg, void* exampleUnsandboxedPtr) const
 		{
 			// static_cast drops constness
 			return (T) TSandbox::impl_GetUnsandboxedPointer(arg, exampleUnsandboxedPtr);
 		}
 
-		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
 			return arg;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> getSandboxSwizzledValue(T arg, void* exampleUnsandboxedPtr) const
 		{
 			return (T) TSandbox::impl_GetSandboxedPointer(arg, exampleUnsandboxedPtr);
 		}
 
-		template<typename TRHS, typename T2=T, ENABLE_IF(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		template<typename TRHS, typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline void assignField(TRHS& value)
 		{
 			auto fieldRef = (uint32_t*) &field;
@@ -979,7 +979,7 @@ namespace rlbox
 			*fieldRef = *valueRef;
 		}
 
-		template<typename TRHS, typename T2=T, ENABLE_IF(!(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value))>
+		template<typename TRHS, typename T2=T, RLBOX_ENABLE_IF(!(my_is_pointer_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value))>
 		inline void assignField(TRHS& value)
 		{
 			field = value;
@@ -994,7 +994,7 @@ namespace rlbox
 			return getAppSwizzledValue(*fieldCopy, (void*) &field /* exampleUnsandboxedPtr */);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline my_decay_if_array_t<T> UNSAFE_Unverified_Check_Range(RLBoxSandbox<TSandbox>* sandbox, size_t size) const noexcept
 		{
 			uintptr_t fieldVal = (uintptr_t) UNSAFE_Unverified();
@@ -1009,7 +1009,7 @@ namespace rlbox
 			return field;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		void assignPointerInSandbox(RLBoxSandbox<TSandbox>* sandbox, T pointerVal)
 		{
 			if(!sandbox->isPointerInSandboxMemoryOrNull(pointerVal))
@@ -1019,20 +1019,20 @@ namespace rlbox
 			field = (T) sandbox->getSandboxedPointer( pointerVal);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			return verifyFunction(UNSAFE_Unverified());
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			return verifyFunction(UNSAFE_Unverified()) == RLBox_Verify_Status::SAFE? field : defaultValue;
 		}
 
 		//Non class pointers - one level pointers
-		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>> && !my_is_void_ptr_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>> && !my_is_void_ptr_v<T2>)>
 		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<RLBox_Verify_Status(my_remove_pointer_or_valid_param_t<T>)> verifyFunction, my_remove_pointer_or_valid_param_t<T> defaultValue) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -1049,7 +1049,7 @@ namespace rlbox
 
 		//Even though this function is not enabled for function types, the C++ compiler complains that this is a function that
 		//	returns a function type
-		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && my_is_class_v<my_remove_pointer_t<T2>>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_one_level_ptr_v<T2> && my_is_class_v<my_remove_pointer_t<T2>>)>
 		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<my_remove_pointer_or_valid_return_t<T>(tainted<my_remove_pointer_t<T>, TSandbox>*)> verifyFunction) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -1063,7 +1063,7 @@ namespace rlbox
 		}
 
 		//app_ptr
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline valid_return_t<T> copyAndVerifyAppPtr(RLBoxSandbox<TSandbox>* sandbox, std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			auto p_appPtrMap = sandbox->getMaintainAppPtrMap();
@@ -1079,7 +1079,7 @@ namespace rlbox
 			return verifyFunction(val);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2>)>
 		inline bool copyAndVerify(my_decay_noconst_if_array_t<T2> copy, size_t sizeOfCopy, std::function<RLBox_Verify_Status(T, size_t)> verifyFunction) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -1140,14 +1140,14 @@ namespace rlbox
 			return ret;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const TRHS& arg) noexcept
 		{
 			assignField(arg);
 			return *this;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_pointer_v<T> && my_is_assignable_v<T&, TRHS*>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_pointer_v<T> && my_is_assignable_v<T&, TRHS*>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const sandbox_app_ptr_wrapper<TRHS>& arg) noexcept
 		{
 			auto val = arg.UNSAFE_Sandboxed();
@@ -1155,7 +1155,7 @@ namespace rlbox
 			return *this;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS*>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_function_ptr_v<T> && my_is_assignable_v<T&, TRHS*>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const sandbox_callback_helper<TRHS, TSandbox>& arg) noexcept
 		{
 			auto val = arg.UNSAFE_Sandboxed();
@@ -1163,7 +1163,7 @@ namespace rlbox
 			return *this;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted<TRHS, TSandbox>& arg) noexcept
 		{
 			auto val = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
@@ -1171,7 +1171,7 @@ namespace rlbox
 			return *this;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted_freezable<TRHS, TSandbox>& arg) noexcept
 		{
 			auto val = getSandboxSwizzledValue(arg.field, (void*) &field /* exampleUnsandboxedPtr */);
@@ -1179,7 +1179,7 @@ namespace rlbox
 			return *this;
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const tainted_freezable_volatile<TRHS, TSandbox>& arg) noexcept
 		{
 			//Avoid freeze check as we writing into sandboxed memory anyway
@@ -1188,7 +1188,7 @@ namespace rlbox
 			return *this;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<T, TSandbox>& operator=(const std::nullptr_t& arg) noexcept
 		{
 			assignField(arg);
@@ -1203,7 +1203,7 @@ namespace rlbox
 			return ret;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
 		{
 			auto ret = (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) getAppSwizzledValue(field, (void*) &field /* exampleUnsandboxedPtr */);
@@ -1221,7 +1221,7 @@ namespace rlbox
 			return *retPtr;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_volatile<my_remove_pointer_t<T>, TSandbox>* operator->()
 		{
 			return (tainted_volatile<my_remove_pointer_t<T>, TSandbox>*) UNSAFE_Unverified();
@@ -1233,49 +1233,49 @@ namespace rlbox
 			return fieldCopy;
 		}
 
-		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
 			auto result = - UNSAFE_Unverified();
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), rlboxUnwrapOrReturnValue(rhs));
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), - rlboxUnwrapOrReturnValue(rhs));
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2> && !rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline tainted_volatile<my_remove_extent_t<T>, TSandbox>& operator[] (size_t x) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -1288,7 +1288,7 @@ namespace rlbox
 			return *((tainted_volatile<my_remove_extent_t<T>, TSandbox> *) locPtr);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_array_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_array_v<T2> && rlbox_detail::has_member_impl_Handle32bitPointerArrays<TSandbox>::value)>
 		inline tainted_volatile<my_remove_extent_t<T>, TSandbox>& operator[] (size_t x) const
 		{
 			auto maskedFieldPtr = (uint32_t*) UNSAFE_Unverified();
@@ -1352,7 +1352,7 @@ namespace rlbox
 		}
 
 		//Non class pointers - one level pointers
-		template<typename T2=T, ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_one_level_ptr_v<T2> && !my_is_class_v<my_remove_pointer_t<T2>>)>
 		inline my_remove_pointer_or_valid_return_t<T> copyAndVerify(std::function<my_remove_pointer_or_valid_return_t<T>(T)> verifyFunction) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
@@ -1365,32 +1365,32 @@ namespace rlbox
 			return verifyFunction(&maskedField);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_freezable_volatile<my_remove_pointer_t<T>, TSandbox>& operator*() const noexcept
 		{
 			auto& ret = *((tainted_freezable_volatile<my_remove_pointer_t<T>, TSandbox>*) field);
 			return ret;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted_freezable_volatile<my_remove_pointer_t<T>, TSandbox>* operator->()
 		{
 			return (tainted_freezable_volatile<my_remove_pointer_t<T>, TSandbox>*) UNSAFE_Unverified();
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline bool operator==(const std::nullptr_t& arg) const
 		{
 			return field == arg;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline bool operator!=(const std::nullptr_t& arg) const
 		{
 			return field != arg;
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline bool operator!() const
 		{
 			return field == nullptr;
@@ -1430,7 +1430,7 @@ namespace rlbox
 		}
 		tainted_freezable_volatile(const tainted_freezable_volatile<T, TSandbox>& p) = default;
 
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_assignable_v<T&, TRHS>)>
 		inline void assignField(TRHS& value)
 		{
 			std::lock_guard<std::mutex> lock(frozenListLock);
@@ -1486,13 +1486,13 @@ namespace rlbox
 			frozenList.erase((void*) &field);
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<valid_return_t<T>(T)> verifyFunction) const
 		{
 			return verifyFunction(UNSAFE_Unverified());
 		}
 
-		template<typename T2=T, ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T2>)>
 		inline T2 copyAndVerify(std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			return verifyFunction(UNSAFE_Unverified()) == RLBox_Verify_Status::SAFE? field : defaultValue;
@@ -1502,14 +1502,14 @@ namespace rlbox
 		{
 		}
 
-		template<typename TRHS, ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<T> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted_freezable_volatile<T, TSandbox>& operator=(const TRHS& arg) noexcept
 		{
 			assignField(arg);
 			return *this;
 		}
 
-		template<typename TRHS, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>> && my_is_assignable_v<T&, TRHS>)>
+		template<typename TRHS, template <typename, typename> class TWrap, RLBOX_ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>> && my_is_assignable_v<T&, TRHS>)>
 		inline tainted_freezable_volatile<T, TSandbox>& operator=(const TWrap<TRHS, TSandbox>& arg) noexcept
 		{
 			auto val = arg.UNSAFE_Unverified();
@@ -1525,42 +1525,42 @@ namespace rlbox
 			return ret;
 		}
 
-		template<typename T2=T, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-() const noexcept
 		{
 			auto result = - UNSAFE_Unverified();
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() + rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() - rlboxUnwrapOrReturnValue(rhs);
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator+(const TRHS rhs) const noexcept
 		{
 			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), rlboxUnwrapOrReturnValue(rhs));
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator-(const TRHS rhs) const noexcept
 		{
 			auto result = TSandbox::impl_pointerIncrement(UNSAFE_Unverified(), - rlboxUnwrapOrReturnValue(rhs));
 			return *((tainted<T, TSandbox>*) &result);
 		}
 
-		template<typename T2=T, typename TRHS, ENABLE_IF(!my_is_pointer_v<T2>)>
+		template<typename T2=T, typename TRHS, RLBOX_ENABLE_IF(!my_is_pointer_v<T2>)>
 		inline tainted<T, TSandbox> operator*(const TRHS rhs) const noexcept
 		{
 			auto result = UNSAFE_Unverified() * rlboxUnwrapOrReturnValue(rhs);
@@ -1659,14 +1659,14 @@ namespace rlbox
 			return verifyFunction(*this); \
 		} \
 		\
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)> \
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_assignable_v<T&, TRHS>)> \
 		inline tainted<T, TSandbox>& operator=(const TRHS& p) noexcept \
 		{ \
 			sandbox_fields_reflection_##libId##_class_##T(helper_fieldInit, helper_noOp, TSandbox) \
 			return *this; \
 		} \
 		\
-		template<typename TRHS, ENABLE_IF(my_is_assignable_v<T&, TRHS>)> \
+		template<typename TRHS, RLBOX_ENABLE_IF(my_is_assignable_v<T&, TRHS>)> \
 		inline tainted<T, TSandbox>& operator=(const tainted_volatile<TRHS, TSandbox>& p) noexcept \
 		{ \
 			sandbox_fields_reflection_##libId##_class_##T(helper_fieldInit, helper_noOp, TSandbox) \
@@ -1685,13 +1685,13 @@ namespace rlbox
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	template <typename TSandbox, typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
+	template <typename TSandbox, typename T, RLBOX_ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
 	inline T sandbox_removeWrapper(RLBoxSandbox<TSandbox>* sandbox, T& arg)
 	{
 		return arg;
 	}
 
-	template<typename TSandbox, typename TRHS, typename... TRHSRem, template<typename, typename...> class TWrap, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
+	template<typename TSandbox, typename TRHS, typename... TRHSRem, template<typename, typename...> class TWrap, RLBOX_ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
 	inline auto sandbox_removeWrapper(RLBoxSandbox<TSandbox>* sandbox, const TWrap<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_Sandboxed(sandbox))
 	{
 		return arg.UNSAFE_Sandboxed(sandbox);
@@ -1703,13 +1703,13 @@ namespace rlbox
 		return arg.UNSAFE_SandboxedNoFreezeCheck();
 	}
 
-	template <typename TSandbox, typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
+	template <typename TSandbox, typename T, RLBOX_ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
 	inline T sandbox_removeWrapperUnsandboxed(RLBoxSandbox<TSandbox>* sandbox, T& arg)
 	{
 		return arg;
 	}
 
-	template<typename TSandbox, typename TRHS, typename... TRHSRem, template<typename, typename...> class TWrap, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
+	template<typename TSandbox, typename TRHS, typename... TRHSRem, template<typename, typename...> class TWrap, RLBOX_ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, TWrap<TRHS, TRHSRem...>>)>
 	inline auto sandbox_removeWrapperUnsandboxed(RLBoxSandbox<TSandbox>* sandbox, const TWrap<TRHS, TRHSRem...>& arg) -> decltype(arg.UNSAFE_Unverified())
 	{
 		return arg.UNSAFE_Unverified();
@@ -1731,7 +1731,7 @@ namespace rlbox
 	template<typename T>
 	tainted_unwrapper<T> sandbox_removeWrapper_t_helper(sandbox_wrapper_base_of<T>);
 
-	template<typename T, ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
+	template<typename T, RLBOX_ENABLE_IF(!my_is_base_of_v<sandbox_wrapper_base, T>)>
 	tainted_unwrapper<T> sandbox_removeWrapper_t_helper(T);
 
 	template <typename T>
@@ -1748,10 +1748,10 @@ namespace rlbox
 	template<typename TSandbox, typename TArg>
 	std::true_type sandbox_callback_is_arg_tainted_helper(tainted<TArg ,TSandbox>);
 
-	template<typename TSandbox, typename TArg, ENABLE_IF(my_is_fundamental_or_enum_v<TArg>)>
+	template<typename TSandbox, typename TArg, RLBOX_ENABLE_IF(my_is_fundamental_or_enum_v<TArg>)>
 	std::true_type sandbox_callback_is_arg_tainted_helper(TArg);
 
-	template<typename TSandbox, typename TArg, ENABLE_IF(!my_is_fundamental_or_enum_v<TArg>)>
+	template<typename TSandbox, typename TArg, RLBOX_ENABLE_IF(!my_is_fundamental_or_enum_v<TArg>)>
 	std::false_type sandbox_callback_is_arg_tainted_helper(TArg);
 
 	template <typename TSandbox, typename TArg>
@@ -1821,7 +1821,7 @@ namespace rlbox
 			return ret;
 		}
 
-		template <typename T, ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, T>)>
+		template <typename T, RLBOX_ENABLE_IF(my_is_base_of_v<sandbox_wrapper_base, T>)>
 		void freeInSandbox(T val)
 		{
 			return this->impl_freeInSandbox(val.UNSAFE_Unverified());
@@ -1873,14 +1873,14 @@ namespace rlbox
 			return this->impl_isPointerInAppMemoryOrNull(p);
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, RLBOX_ENABLE_IF(my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		void invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
 			// TODO: use std::forward?
 			this->impl_InvokeFunction(fnPtr, sandbox_removeWrapper(this, params)...);
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(!my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, RLBOX_ENABLE_IF(!my_is_void_v<return_argument<T>> && sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		tainted<return_argument<T>, TSandbox> invokeWithFunctionPointer(T* fnPtr, TArgs&&... params)
 		{
 			// TODO: use std::forward?
@@ -1888,7 +1888,7 @@ namespace rlbox
 			return ret;
 		}
 
-		template <typename T, typename ... TArgs, ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
+		template <typename T, typename ... TArgs, RLBOX_ENABLE_IF(sandbox_function_have_all_args_fundamental_or_wrapped<TArgs...>::value && my_is_invocable_v<T, sandbox_removeWrapper_t<TArgs>...>)>
 		return_argument<T> invokeWithFunctionPointerReturnAppPtr(T* fnPtr, TArgs&&... params)
 		{
 			auto ret = this->impl_InvokeFunctionReturnAppPtr(fnPtr, sandbox_removeWrapper(this, params)...);
@@ -2011,7 +2011,7 @@ namespace rlbox
 			return heaparr(str, strlen(str) + 1);
 		}
 
-		template <typename TRet, typename... TArgs, ENABLE_IF(sandbox_callback_all_args_are_tainted<TSandbox, TArgs...>::value)>
+		template <typename TRet, typename... TArgs, RLBOX_ENABLE_IF(sandbox_callback_all_args_are_tainted<TSandbox, TArgs...>::value)>
 		__attribute__ ((noinline))
 		sandbox_callback_helper<TRet(sandbox_removeWrapper_t<TArgs>...), TSandbox> createCallback(TRet(*fnPtr)(RLBoxSandbox<TSandbox>*, TArgs...))
 		{
@@ -2025,7 +2025,7 @@ namespace rlbox
 		}
 	};
 
-	template<typename TLHS, typename TRHS, typename TSandbox, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>> && my_is_pointer_v<TLHS> && my_is_pointer_v<TRHS>)>
+	template<typename TLHS, typename TRHS, typename TSandbox, template <typename, typename> class TWrap, RLBOX_ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>> && my_is_pointer_v<TLHS> && my_is_pointer_v<TRHS>)>
 	inline tainted<TLHS, TSandbox> sandbox_reinterpret_cast(const TWrap<TRHS, TSandbox>& rhs) noexcept
 	{
 		tainted<TRHS, TSandbox> taintedVal = rhs;
@@ -2033,7 +2033,7 @@ namespace rlbox
 		return *pret;
 	}
 
-	template<typename TSandbox, typename TRHS, typename TVal, typename TNum, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
+	template<typename TSandbox, typename TRHS, typename TVal, typename TNum, template <typename, typename> class TWrap, RLBOX_ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
 	inline TWrap<TRHS*, TSandbox> memset(RLBoxSandbox<TSandbox>* sandbox, TWrap<TRHS*, TSandbox> ptr, TVal value, TNum num)
 	{
 		auto unum = rlboxUnwrapOrReturnValue(num);
@@ -2047,7 +2047,7 @@ namespace rlbox
 		return ptr;
 	}
 
-	template<typename TSandbox, typename TRHS, typename TLHS, typename TNum, template <typename, typename> class TWrap, ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
+	template<typename TSandbox, typename TRHS, typename TLHS, typename TNum, template <typename, typename> class TWrap, RLBOX_ENABLE_IF(my_is_base_of_v<tainted_base<TRHS, TSandbox>, TWrap<TRHS, TSandbox>>)>
 	inline TWrap<TRHS*, TSandbox> memcpy(RLBoxSandbox<TSandbox>* sandbox, TWrap<TRHS*, TSandbox> dest, TLHS src, TNum num)
 	{
 		auto unum = rlboxUnwrapOrReturnValue(num);

@@ -82,9 +82,9 @@ public:
 	inline void impl_DestroySandbox()
 	{
 		int err = dlclose(libHandle);
-		if(!err)
+		if(err)
 		{
-			printf("Error closing DynLib sandbox\n");
+			printf("Error closing DynLib sandbox. Error %s.\n", dlerror());
 		}
 	}
 

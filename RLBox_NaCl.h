@@ -66,7 +66,7 @@ class RLBox_NaCl
 {
 private:
 	NaClSandbox* sandbox;
-	std::once_flag initFlag;
+	static std::once_flag initFlag;
 	std::mutex createAndCallbackMutex;
 	#if defined(_M_IX86) || defined(__i386__)
 		static std::mutex sandboxListMutex;
@@ -602,6 +602,7 @@ public:
 	}
 };
 
+std::once_flag RLBox_NaCl::initFlag __attribute__((weak));
 #if defined(_M_IX86) || defined(__i386__)
 	std::mutex RLBox_NaCl::sandboxListMutex __attribute__((weak));
 	std::vector<NaClSandbox*> RLBox_NaCl::sandboxList __attribute__((weak));
