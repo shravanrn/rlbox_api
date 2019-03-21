@@ -268,6 +268,10 @@ public:
 		}
 		auto ret = aCopy + strlen(bCopy);
 		free((void*)bCopy);
+
+		//test reentrancy
+		tainted<int*, TSandbox> pFoo = sandbox->template mallocInSandbox<int>();
+		sandbox->freeInSandbox(pFoo);
 		return ret;
 	}
 
