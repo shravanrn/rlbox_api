@@ -862,7 +862,7 @@ int main(int argc, char const *argv[])
 	#ifndef NO_WASM
 		#if !(defined(_M_IX86) || defined(__i386__))
 		printf("Testing WASM\n");
-		runTests<RLBox_Wasm>("", "./libwasm_test.so", true, false, false);
+		runTests<RLBox_Wasm>("", "./libwasm_test.so", false, false, false);
 		#endif
 	#endif
 
