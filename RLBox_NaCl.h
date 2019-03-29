@@ -412,6 +412,7 @@ public:
 	static inline void* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
+			if(p == 0) { return 0; }
 			std::lock_guard<std::mutex> lock(sandboxListMutex);
 			for(NaClSandbox* sandbox : sandboxList)
 			{
@@ -441,6 +442,7 @@ public:
 	static inline void* impl_GetSandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
 		#if defined(_M_IX86) || defined(__i386__)
+			if(p == 0) { return 0; }
 			std::lock_guard<std::mutex> lock(sandboxListMutex);
 			for(NaClSandbox* sandbox : sandboxList)
 			{

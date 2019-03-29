@@ -154,6 +154,7 @@ public:
 	template<typename T>
 	static inline void* impl_GetUnsandboxedPointer(T* p, void* exampleUnsandboxedPtr)
 	{
+		if(p == 0) { return 0; }
 		std::lock_guard<std::mutex> lock(sandboxListMutex);
 		for(WasmSandbox* sandbox : sandboxList)
 		{
