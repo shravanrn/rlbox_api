@@ -71,7 +71,7 @@ public:
 			printf("Could not open symbol table of my app\n");
 			abort();
 		}
-		procSandbox = new TProcSandbox(libraryPath, 1, 3);
+		procSandbox = new TProcSandbox(libraryPath, 9999 /* maincore: special marker for don't change */, 3 /* sbox_process_core */);
 		std::lock_guard<std::mutex> lock(sandboxListMutex);
 		sandboxList.push_back(procSandbox);
 	}
