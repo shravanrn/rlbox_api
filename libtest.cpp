@@ -156,3 +156,7 @@ int internalCallback(unsigned a, const char* b, unsigned c[1])
 void simplePointerWrite(int* ptr, int val) {
 	*ptr = val;
 }
+
+int simpleCallbackTest2(unsigned long startVal, CallbackType2 cb) {
+	return cb(startVal, startVal+1, startVal+2, startVal+3, startVal+4, startVal+5);
+}

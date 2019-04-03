@@ -58,6 +58,7 @@ class SandboxTests
 public:
 	RLBoxSandbox<TSandbox>* sandbox;
 	sandbox_callback_helper<int(unsigned, const char*, unsigned[1]), TSandbox> registeredCallback;
+	sandbox_callback_helper<int(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long), TSandbox> registeredCallback2;
 
 	void testGetSandbox()
 	{
@@ -275,13 +276,42 @@ public:
 		return ret;
 	}
 
+	static int exampleCallback2(RLBoxSandbox<TSandbox>* sandbox, 
+		tainted<unsigned long, TSandbox> val1,
+		tainted<unsigned long, TSandbox> val2,
+		tainted<unsigned long, TSandbox> val3,
+		tainted<unsigned long, TSandbox> val4,
+		tainted<unsigned long, TSandbox> val5,
+		tainted<unsigned long, TSandbox> val6
+	)
+	{
+		return (
+			(val1.UNSAFE_Unverified() == 4) &&
+			(val2.UNSAFE_Unverified() == 5) &&
+			(val3.UNSAFE_Unverified() == 6) &&
+			(val4.UNSAFE_Unverified() == 7) &&
+			(val5.UNSAFE_Unverified() == 8) &&
+			(val6.UNSAFE_Unverified() == 9)
+		)? 11 : -1;
+	}
+
 	void testCallback()
 	{
-		auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), registeredCallback);
+		{
+			auto resultT = sandbox_invoke(sandbox, simpleCallbackTest, (unsigned) 4, sandbox->stackarr("Hello"), registeredCallback);
 
-		auto result = resultT
-			.copyAndVerify([](int val){ return val > 0 && val < 100? val : -1; });
-		ENSURE(result == 10);
+			auto result = resultT
+				.copyAndVerify([](int val){ return val > 0 && val < 100? val : -1; });
+			ENSURE(result == 10);
+		}
+
+		{
+			auto resultT = sandbox_invoke(sandbox, simpleCallbackTest2, 4, registeredCallback2);
+
+			auto result = resultT
+				.copyAndVerify([](int val){ return val; });
+			ENSURE(result == 11);
+		}
 	}
 
 	void testInternalCallback()
@@ -663,11 +693,13 @@ public:
 	{
 		sandbox = RLBoxSandbox<TSandbox>::createSandbox(runtimePath, libraryPath);
 		registeredCallback = sandbox->createCallback(exampleCallback);
+		registeredCallback2 = sandbox->createCallback(exampleCallback2);
 	}
 
 	void finish()
 	{
 		registeredCallback.unregister();
+		registeredCallback2.unregister();
 		sandbox->destroySandbox();
 		free(sandbox);
 	}

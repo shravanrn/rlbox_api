@@ -4,6 +4,7 @@
 
 extern "C" {
     typedef int (*CallbackType)(unsigned, const char*, unsigned[1]);
+    typedef int (*CallbackType2)(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long);
 
     struct testStruct
     {
@@ -50,4 +51,5 @@ extern "C" {
     struct pointersStruct* initializePointerStructPtr(char* initVal);
     int internalCallback(unsigned, const char*, unsigned[1]);
     void simplePointerWrite(int* ptr, int val);
+    int simpleCallbackTest2(unsigned long startVal, CallbackType2 cb);
 }
