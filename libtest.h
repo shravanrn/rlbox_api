@@ -2,7 +2,9 @@
 
 #include <stdio.h>
 
+#ifdef __cplusplus
 extern "C" {
+#endif
     typedef int (*CallbackType)(unsigned, const char*, unsigned[1]);
     typedef int (*CallbackType2)(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long);
 
@@ -33,6 +35,7 @@ extern "C" {
     };
 
     unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b);
+    double simpleDivideTest(double a, double b);
     int simpleAddTest(int a, int b);
     size_t simpleStrLenTest(const char* str);
     int simpleCallbackTest(unsigned a, const char* b, CallbackType callback);
@@ -52,4 +55,6 @@ extern "C" {
     int internalCallback(unsigned, const char*, unsigned[1]);
     void simplePointerWrite(int* ptr, int val);
     int simpleCallbackTest2(unsigned long startVal, CallbackType2 cb);
+#ifdef __cplusplus
 }
+#endif

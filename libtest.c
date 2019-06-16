@@ -9,6 +9,11 @@ unsigned long simpleAddNoPrintTest(unsigned long a, unsigned long b)
 	return a + b;
 }
 
+double simpleDivideTest(double a, double b)
+{
+	return a / b;
+}
+
 int simpleAddTest(int a, int b)
 {
 	printf("simpleAddTest\n");
