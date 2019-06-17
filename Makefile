@@ -15,6 +15,7 @@ PROCESS_SANDBOX_DIR=$(shell realpath ../ProcessSandbox)
 SANDBOXING_NACL_DIR=$(shell realpath ../Sandboxing_NaCl)
 WASM_SANDBOX_DIR?=$(shell realpath ../wasm-sandboxing)
 EMSDK_DIR?=$(shell realpath ../emsdk)
+LUCET_SANDBOX_DIR=$(shell realpath ../lucet-playground)
 
 ifeq ($(NO_PROCESS),1)
 	PROCESS_INCLUDES=-DNO_PROCESS
@@ -48,6 +49,7 @@ else
 endif
 
 include $(WASM_SANDBOX_DIR)/builds/Makefile.inc
+include $(LUCET_SANDBOX_DIR)/Makefile.inc
 
 mkdir_out:
 	mkdir -p ./out/x32
@@ -76,18 +78,24 @@ ifeq ($(NO_NACL),1)
 out/x64/libtest.nexe:
 else
 out/x64/libtest.nexe: mkdir_out $(CURDIR)/libtest.c $(CURDIR)/libtest.h
-		$(NACL_CLANG++64) -O3 -fPIC -B$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib/ -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/toolchain/linux_x86/pnacl_newlib/x86_64-nacl/lib -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib $(CURDIR)/libtest.c -L$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib -L$(SANDBOXING_NACL_DIR)/native_client/toolchain/linux_x86/pnacl_newlib/x86_64-nacl/lib -L$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib -ldyn_ldr_sandbox_init -o $@
+	$(NACL_CLANG++64) -O3 -fPIC -B$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib/ -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/toolchain/linux_x86/pnacl_newlib/x86_64-nacl/lib -Wl,-rpath-link,$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib $(CURDIR)/libtest.c -L$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib -L$(SANDBOXING_NACL_DIR)/native_client/toolchain/linux_x86/pnacl_newlib/x86_64-nacl/lib -L$(SANDBOXING_NACL_DIR)/native_client/scons-out/nacl-x86-64/lib -ldyn_ldr_sandbox_init -o $@
 endif
 
 ifeq ($(NO_WASM),1)
 out/x64/libwasm_test.so:
+out/x64/liblucetwasm_test.so:
 else
 .ONESHELL:
 SHELL=/bin/bash
 out/x64/libwasm_test.so: mkdir_out $(CURDIR)/libtest.c $(CURDIR)/libtest.h
-		source $(EMSDK_DIR)/emsdk_env.sh && \
-		emcc -std=c++11 $(CFLAGS) -O0 $(CURDIR)/libtest.c -c -o ./out/x64/libwasm_test.o && \
-		$(call convert_to_wasm,$(abspath ./out/x64/libwasm_test.o),$(abspath ./out/x64/libwasm_test.js),$(CFLAGS))
+	source $(EMSDK_DIR)/emsdk_env.sh && \
+	emcc -std=c++11 $(CFLAGS) -O0 $(CURDIR)/libtest.c -c -o ./out/x64/libwasm_test.o && \
+	$(call convert_to_wasm,$(abspath ./out/x64/libwasm_test.o),$(abspath ./out/x64/libwasm_test.js),$(CFLAGS))
+
+out/x64/liblucetwasm_test.so: mkdir_out $(CURDIR)/libtest.c $(CURDIR)/libtest.h
+	$(call lucet_produce_wasm, $(CURDIR)/libtest.c $(CFLAGS) -o $(CURDIR)/out/x64/liblucetwasm_test.wasm) && \
+	$(call lucet_produce_so, $(CURDIR)/out/x64/liblucetwasm_test.wasm -o $(CURDIR)/out/x64/liblucetwasm_test.so)
+
 endif
 
 build: out/x32/test out/x64/test out/x32/libtest.so out/x64/libtest.so out/x32/libtest.nexe out/x64/libtest.nexe out/x64/libwasm_test.so
