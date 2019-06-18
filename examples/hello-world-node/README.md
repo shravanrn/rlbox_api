@@ -4,7 +4,7 @@ anything. It just loads the library dynamically and calls a bunch of library
 functions. This example extends the [hello-world-nop](../hello-world-nop) example.
 
 - `mylib.{h,c}` is the simple library
-- `main.cpp` is our main program
+- `hello.js` is our main program
 
 ### Install node.js
 
