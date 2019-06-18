@@ -48,8 +48,8 @@ else
 	WASM_LIBS_64=$(WASM_SANDBOX_DIR)/bin/libwasm_sandbox.o
 endif
 
-# include $(WASM_SANDBOX_DIR)/builds/Makefile.inc
-# include $(LUCET_SANDBOX_DIR)/Makefile.inc
+-include $(WASM_SANDBOX_DIR)/builds/Makefile.inc
+-include $(LUCET_SANDBOX_DIR)/Makefile.inc
 
 mkdir_out:
 	mkdir -p ./out/x32
@@ -98,7 +98,9 @@ out/x64/liblucetwasm_test.so: mkdir_out $(CURDIR)/libtest.c $(CURDIR)/libtest.h
 
 endif
 
-build:  out/x64/test  out/x64/libtest.so  out/x64/libtest.nexe out/x64/libwasm_test.so
+build32: out/x32/test out/x32/libtest.so out/x32/libtest.nexe
+build64: out/x64/test out/x64/libtest.so out/x64/libtest.nexe out/x64/libwasm_test.so
+build:  build32 build64
 
 run32:
 	cd ./out/x32 && ./test
