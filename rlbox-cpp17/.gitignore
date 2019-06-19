@@ -1,0 +1,5 @@
+/build
+*.json
+*.o
+.ccls
+.vscode
