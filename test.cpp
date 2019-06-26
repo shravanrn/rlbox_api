@@ -363,6 +363,23 @@ public:
 		free(retStr);
 	}
 
+	void testArrayAndStringNulls() {
+
+		const char* str = "Hello";
+
+		auto retStrNullRaw = sandbox_invoke(sandbox, simpleEchoTest, nullptr);
+		char* retStrNull;
+
+		retStrNull = retStrNullRaw.copyAndVerifyString(sandbox, [](char* val) { return RLBox_Verify_Status::SAFE; }, nullptr);
+		ENSURE(retStrNull == nullptr);
+
+		retStrNull = retStrNullRaw.copyAndVerifyString(sandbox, [](char* val) { return RLBox_Verify_Status::SAFE; }, const_cast<char*>(str));
+		ENSURE(retStrNull == nullptr);
+
+		retStrNull = retStrNullRaw.copyAndVerifyArray(sandbox, [](char* val) { return RLBox_Verify_Status::SAFE; }, 100, nullptr);
+		ENSURE(retStrNull == nullptr);
+	}
+
 	void testFloatingPoint()
 	{
 		auto resultF = sandbox_invoke(sandbox, simpleFloatAddTest, 1.0f, 2.0f)
@@ -729,6 +746,7 @@ public:
 		testInternalCallback();
 		testCallbackOnStruct();
 		testEchoAndPointerLocations();
+		testArrayAndStringNulls();
 		testFloatingPoint();
 		testPointerValAdd();
 		testStructures(ignoreGlobalStringsInLib);

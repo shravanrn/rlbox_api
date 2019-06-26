@@ -743,6 +743,9 @@ namespace rlbox
 			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
+			if (maskedFieldPtr == nullptr) {
+				return nullptr;
+			}
 			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
 			static_assert(sizeof(nonPointerType) <= 0xFFFFFFFF, "Overflow on size of type in copyAndVerifyArray");
 			auto arrayByteLen = static_cast<uint64_t>(sizeof(nonPointerType)) * static_cast<uint64_t>(elementCount);
@@ -767,6 +770,9 @@ namespace rlbox
 		inline my_decay_if_array_t<T> copyAndVerifyString(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
+			if (maskedFieldPtr == nullptr) {
+				return nullptr;
+			}
 			auto elementCount = strlen(maskedFieldPtr) + 1;
 
 			auto ret = copyAndVerifyArray(sandbox, verifyFunction, elementCount, defaultValue);
@@ -1104,6 +1110,9 @@ namespace rlbox
 			typedef my_remove_const_t<nonPointerType> nonPointerConstType;
 
 			auto maskedFieldPtr = UNSAFE_Unverified();
+			if (maskedFieldPtr == nullptr) {
+				return nullptr;
+			}
 			auto maskedFieldInt = reinterpret_cast<uintptr_t>(maskedFieldPtr);
 			static_assert(sizeof(nonPointerType) <= 0xFFFFFFFF, "Overflow on size of type in copyAndVerifyArray");
 			auto arrayByteLen = static_cast<uint64_t>(sizeof(nonPointerType)) * static_cast<uint64_t>(elementCount);
@@ -1128,6 +1137,9 @@ namespace rlbox
 		inline my_decay_if_array_t<T> copyAndVerifyString(RLBoxSandbox<TSandbox>* sandbox, std::function<RLBox_Verify_Status(T)> verifyFunction, T defaultValue) const
 		{
 			auto maskedFieldPtr = UNSAFE_Unverified();
+			if (maskedFieldPtr == nullptr) {
+				return nullptr;
+			}
 			auto elementCount = strlen(maskedFieldPtr) + 1;
 
 			auto ret = copyAndVerifyArray(sandbox, verifyFunction, elementCount, defaultValue);
