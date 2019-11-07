@@ -57,7 +57,7 @@ namespace RLBox_NaCl_detail {
 	}
 
 	//https://stackoverflow.com/questions/19532475/casting-a-variadic-parameter-pack-to-void
-	struct UNUSED { template<typename ...Args> UNUSED(Args const & ... ) {} };
+	struct RLUNUSED { template<typename ...Args> RLUNUSED(Args const & ... ) {} };
 };
 
 #define ENABLE_IF(...) typename std::enable_if<__VA_ARGS__>::type* = nullptr
@@ -127,7 +127,7 @@ private:
 	template <typename T>
 	inline T sandbox_callback_return(NaClSandbox_Thread* threadData, T arg)
 	{
-		RLBox_NaCl_detail::UNUSED{threadData};
+		RLBox_NaCl_detail::RLUNUSED{threadData};
 		return arg;
 	}
 
@@ -220,7 +220,7 @@ private:
 			uintptr_t target = threadData->stack_ptr_forParameters + sizeof(void*);
 			sandbox_handleNaClArg(threadData, impl_GetSandboxedPointer((void*)target));
 			ALLOCATE_STACK_VARIABLE(threadData, T, tPtr);
-			RLBox_NaCl_detail::UNUSED{tPtr};
+			RLBox_NaCl_detail::RLUNUSED{tPtr};
 			return (void*) target;
 		#elif defined(_M_X64) || defined(__x86_64__)
 			ALLOCATE_STACK_VARIABLE(threadData, T, tPtr);
@@ -235,7 +235,7 @@ private:
 	inline typename std::enable_if<!std::is_class<T>::value,
 	void*>::type sandbox_dealWithNaClReturnArg(NaClSandbox_Thread* threadData)
 	{
-		RLBox_NaCl_detail::UNUSED{threadData};
+		RLBox_NaCl_detail::RLUNUSED{threadData};
 		return nullptr;
 	}
 
@@ -244,8 +244,8 @@ private:
 	template<typename TFuncRet>
 	inline void sandbox_dealWithNaClArgs(NaClSandbox_Thread* threadData, TFuncRet(*fnPtr)())
 	{
-		RLBox_NaCl_detail::UNUSED{threadData};
-		RLBox_NaCl_detail::UNUSED{fnPtr};
+		RLBox_NaCl_detail::RLUNUSED{threadData};
+		RLBox_NaCl_detail::RLUNUSED{fnPtr};
 	}
 
 
@@ -263,15 +263,15 @@ private:
 	inline typename std::enable_if<std::is_void<RLBox_NaCl_detail::return_argument<T>>::value,
 	void>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
-		RLBox_NaCl_detail::UNUSED{threadData};
-		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
+		RLBox_NaCl_detail::RLUNUSED{threadData};
+		RLBox_NaCl_detail::RLUNUSED{returnPtrSlot};
 	}
 
 	template <typename T, typename ... Targs>
 	inline typename std::enable_if<std::is_pointer<RLBox_NaCl_detail::return_argument<T>>::value,
 	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
-		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
+		RLBox_NaCl_detail::RLUNUSED{returnPtrSlot};
 		return (RLBox_NaCl_detail::return_argument<T>)functionCallReturnPtr(threadData);
 	}
 
@@ -279,7 +279,7 @@ private:
 	inline typename std::enable_if<std::is_same<RLBox_NaCl_detail::return_argument<T>, float>::value,
 	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
-		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
+		RLBox_NaCl_detail::RLUNUSED{returnPtrSlot};
 		return (RLBox_NaCl_detail::return_argument<T>)functionCallReturnFloat(threadData);
 	}
 
@@ -287,7 +287,7 @@ private:
 	inline typename std::enable_if<std::is_same<RLBox_NaCl_detail::return_argument<T>, double>::value,
 	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
-		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
+		RLBox_NaCl_detail::RLUNUSED{returnPtrSlot};
 		return (RLBox_NaCl_detail::return_argument<T>)functionCallReturnDouble(threadData);
 	}
 
@@ -299,7 +299,7 @@ private:
 		#if defined(_M_IX86) || defined(__i386__)
 			auto ptr = (RLBox_NaCl_detail::return_argument<T>*) returnPtrSlot;
 		#elif defined(_M_X64) || defined(__x86_64__)
-			RLBox_NaCl_detail::UNUSED{returnPtrSlot};
+			RLBox_NaCl_detail::RLUNUSED{returnPtrSlot};
 			auto ptr = ((RLBox_NaCl_detail::return_argument<T>*)functionCallReturnPtr(threadData));
 		#else
 			#error Unknown platform!
@@ -312,7 +312,7 @@ private:
 	inline typename std::enable_if<!std::is_pointer<RLBox_NaCl_detail::return_argument<T>>::value && !std::is_void<RLBox_NaCl_detail::return_argument<T>>::value && !std::is_floating_point<RLBox_NaCl_detail::return_argument<T>>::value && !std::is_class<RLBox_NaCl_detail::return_argument<T>>::value,
 	RLBox_NaCl_detail::return_argument<T>>::type sandbox_invokeNaClReturn(NaClSandbox_Thread* threadData, void* returnPtrSlot)
 	{
-		RLBox_NaCl_detail::UNUSED{returnPtrSlot};
+		RLBox_NaCl_detail::RLUNUSED{returnPtrSlot};
 		return (RLBox_NaCl_detail::return_argument<T>)functionCallReturnRawPrimitiveInt(threadData);
 	}
 

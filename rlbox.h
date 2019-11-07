@@ -44,7 +44,7 @@ namespace rlbox
 {
 	//https://stackoverflow.com/questions/19532475/casting-a-variadic-parameter-pack-to-void
 	struct UNUSED_PACK_HELPER { template<typename ...Args> UNUSED_PACK_HELPER(Args const & ... ) {} };
-	#define UNUSED(x) rlbox::UNUSED_PACK_HELPER {x}
+	#define RLUNUSED(x) rlbox::UNUSED_PACK_HELPER {x}
 
 	//C++11 doesn't have the _t and _v convenience helpers, so create these
 	//Note the _v variants uses one C++ 14 feature we use ONLY FOR convenience. This generates some warnings that can be ignored.
@@ -2077,6 +2077,6 @@ namespace rlbox
 	#define sandbox_invoke_return_app_ptr(sandbox, fnName, ...) sandbox->invokeWithFunctionPointerReturnAppPtr((decltype(fnName)*)sandbox->getFunctionPointerFromCache(#fnName, false), ##__VA_ARGS__)
 	#define sandbox_invoke_with_fnptr(sandbox, fnPtr, ...) sandbox->invokeWithFunctionPointer(fnPtr, ##__VA_ARGS__)
 	#define sandbox_function(sandbox, fnName) sandbox_convertToUnverified<decltype(fnName)*>(sandbox, (decltype(fnName)*) sandbox->getFunctionPointerFromCache(#fnName, true))
-	#undef UNUSED
+	#undef RLUNUSED
 }
 #endif
