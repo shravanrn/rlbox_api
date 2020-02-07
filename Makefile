@@ -1,6 +1,6 @@
 .PHONY: build mkdir_out run32 run64
 
-.DEFAULT_GOAL = build
+.DEFAULT_GOAL = build64
 
 # Note - Use NO_NACL=1 to disable nacl build
 # Note - Use NO_WASM=1 to disable wasm build
