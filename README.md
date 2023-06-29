@@ -1,2 +1,2 @@
-# rlbox_api
+# rlbox_api (Deprecated prototypes)
 API implementation for RLBox
